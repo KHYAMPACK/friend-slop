@@ -72,8 +72,9 @@ Players should feel like they are **decorating a house for war crimes with a sho
 - Engine: **Raylib 5.5** (fetched by CMake; do not vendor a second copy)
 - Language: **C++17** (Raylib is a C library; we call it from C++. No extra frameworks.)
 - Build: **CMake** is the only supported build. Both people use the same commands.
+- Steam: **Steamworks SDK** is the one allowed extra library. Dev App ID is **480 (Spacewar)** via `steam_appid.txt` next to the exe. Do **not** call `SteamAPI_RestartAppIfNecessary` until we have a real App ID (480 would relaunch Valve’s Spacewar). SDK lives in `third_party/steamworks/` or `STEAMWORKS_SDK` — never commit the SDK tree. Current slice is **init + overlay only** (persona name in the window). No lobbies, P2P, or movement sync yet.
 - Workflow: **console / source files only** — no Godot, no visual scene editor, no generated project files checked in
-- Multiplayer: required for the real fantasy; prototype **local-first** (same machine / hotseat / split or sequential local) before full online
+- Multiplayer: required for the real fantasy; Steam identity is in. Gameplay can still prototype **local-first**. Online netcode is a later slice.
 - Repo: this Raylib project only (not the Godot `heart-house` repo, not Tilky Engine)
 
 ## Project layout
@@ -84,21 +85,24 @@ Folders map to ownership so diffs stay reviewable:
 src/
   main.cpp         # entry + window + main loop; phase switching lives here later
   core/            # shared constants + tiny types (no gameplay systems)
+  steam/           # SteamAPI init, tick, shutdown, status line (no netcode yet)
   maps/house/      # premade House graybox / map
   player/          # movement + camera
   heart/           # Heart objective
   build/           # hotbar, snap place, budget, timer, save layout
-  traps/           # one .cpp + .h per trap type
+  traps/           # one .cpp + .hpp per trap type
   raid/            # run mode, win/fail, scoring hooks
   spectate/        # spectator camera + trigger buttons
   ui/              # menus / HUD
 assets/            # textures, models, sfx (committed; not build output)
+steam_appid.txt    # 480 for Spacewar testing; copied next to the exe at build
 ```
 
 - One folder ≈ one job.
-- Colocate `thing.cpp` + `thing.h`.
+- Colocate `thing.cpp` + `thing.hpp`.
 - Prefer editing inside the owning folder over inventing parallel systems.
-- Named constants live in `src/core/game_constants.h` — no magic numbers scattered.
+- Named constants live in `src/core/game_constants.hpp` as `inline constexpr` in `namespace hh` — no `#define` values, no magic numbers scattered.
+- Modern C++17 in our code: `constexpr`, `nullptr`, `[[nodiscard]]`, `std::array` where it fits. Raylib/Steam stay C APIs at the call site. See `.cursor/rules/modern-cpp.mdc`.
 
 ## Code style (human-first)
 
@@ -107,6 +111,7 @@ Written so a teammate can review AI diffs without guessing:
 - Short file header: what it does + which area owns it.
 - One responsibility per `.cpp` file. If it needs “and also…”, split it.
 - Prefer plain Raylib + small C++ files (structs + functions) over engines, ECS frameworks, or plugin stacks.
+- Use modern C++17 (`constexpr`, `nullptr`, `[[nodiscard]]`). Do not `#define` numeric/string constants.
 - Name files for what the player sees (`spike_floor`, `locked_door`), not abstractions.
 - Keep PRs/commits small enough to read in one sitting.
 - Match `.clang-format` (4-space indent). Do not fight the formatter.
@@ -119,9 +124,10 @@ This repo is meant for **two people + Cursor agents** working from the console.
 - Use Git. **Pull (or rebase) before you start.** Push when a chunk actually runs.
 - Prefer **feature branches + PRs into `main`**. Do not both commit straight to `main` for overlapping work.
 - Never commit `build/`, compiler output, `.vs/`, or local CMake caches. `.gitignore` already covers this.
-- **Do not edit the same `.cpp` / `.h` at the same time.** Split by the ownership table. If you must touch a shared file (`main.cpp`, `game_constants.h`, `CMakeLists.txt`), ping the other person first and keep the diff tiny.
+- **Do not edit the same `.cpp` / `.hpp` at the same time.** Split by the ownership table. If you must touch a shared file (`main.cpp`, `game_constants.hpp`, `CMakeLists.txt`), ping the other person first and keep the diff tiny.
 - Keep commits small and descriptive.
 - Raylib itself is downloaded by CMake (FetchContent). Do not copy raylib sources into the repo.
+- Steamworks SDK is local-only (`third_party/steamworks/` is gitignored). Do not commit `steam_api64.dll` / `.lib` / the SDK zip.
 - Shared tunables (`MAX_PLACEMENTS`, timers) change only when both people agree — they are match rules, not local prefs.
 - Assets that the game needs belong in `assets/` and get committed. Scratch / export junk does not.
 
@@ -140,11 +146,11 @@ This repo is meant for **two people + Cursor agents** working from the console.
 | Build phase | Trap hotbar, snap place, budget, timer, save layout |
 | Raid / spectate | Load layout, spectator camera, trigger buttons, scoring |
 
-`src/main.cpp`, `src/core/`, and `CMakeLists.txt` are shared. Touch them last, in small diffs, and tell the other person.
+`src/main.cpp`, `src/core/`, and `CMakeLists.txt` are shared. Touch them last, in small diffs, and tell the other person. `src/steam/` owns Steam init.
 
 ## How to build (both people, same commands)
 
-Needs: Git, CMake 3.16+, a C++ compiler (Visual Studio Build Tools on Windows, or MinGW).
+Needs: Git, CMake 3.16+, a C++ compiler (Visual Studio Build Tools on Windows, or MinGW), Steam client, and the Steamworks SDK (see README).
 
 ```
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
@@ -179,7 +185,8 @@ If that slice already makes people yell on voice chat, the idea is validated.
 - Complex wire/logic puzzles in the build phase.
 - Huge content library before the loop is fun.
 - Building this in Godot or Tilky Engine (this repo is Raylib).
-- Online netcode before local hotseat/split is fun.
+- Steam lobbies / P2P / movement sync (init + overlay only until asked).
+- `SteamAPI_RestartAppIfNecessary` while App ID is 480.
 
 ## Tone / product feel
 
@@ -196,7 +203,8 @@ Friend-slop party game: fast, nostalgic, absurd, readable, scream-on-Discord ene
 - When adding traps, make them readable and spectator-triggerable when relevant.
 - Don’t expand scope into combat systems unless asked.
 - Match existing naming and file style once files exist.
-- Do not add extra libraries, engines, or build systems unless asked. Raylib + CMake only.
+- Do not add extra libraries, engines, or build systems unless asked. Allowed: Raylib + CMake + Steamworks (init/overlay only).
+- Do not add Steam lobbies, P2P, or `SteamAPI_RestartAppIfNecessary` unless asked.
 - When adding a source file, update `CMakeLists.txt` in the same change.
 - Ask before changing core loop rules (phases, heart objective, 6-placement budget, spectator buttons).
 
