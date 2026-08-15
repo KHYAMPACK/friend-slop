@@ -1,4 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+# Steam overlay + MSVC Debug CRT (/MDd) is a common 0xC0000005 on some PCs.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+
 project(heart_house CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -45,17 +51,11 @@ endif()
 add_executable(${PROJECT_NAME}
     src/main.cpp
     src/steam/steam_client.cpp
-    Headers/Math/Vector/Vector2.hpp
-    Headers/Math/Vector/Vector2Math.hpp
-    Headers/Math/Vector/Vector3.hpp
-    Headers/Math/Vector/Vector3Math.hpp
-    Headers/Math/Vector/Vector4.hpp
-    Headers/Math/Quaternion/Quaternion.hpp
-    Headers/Math/Matrix/Matrix4.hpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     src
+    "${CMAKE_SOURCE_DIR}/Headers"
     "${STEAMWORKS_SDK}/public"
 )
 target_link_libraries(${PROJECT_NAME} PRIVATE

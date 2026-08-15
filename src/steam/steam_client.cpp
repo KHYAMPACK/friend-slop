@@ -1,8 +1,5 @@
 /* SteamAPI init / tick / shutdown, friends lobby for seeing names.
- * Area: steam. No movement sync, no RestartAppIfNecessary.
- *
- * Steam callbacks must not call Leave/Join/RequestUserInformation inline — that
- * crashed the joining client. Queue work and flush after RunCallbacks.
+ * Area: steam. No movement sync, no overlay (overlay + OpenGL 0xC0000005 on some PCs).
  */
 
 #include "steam/steam_client.hpp"
@@ -11,7 +8,14 @@
 
 #include <array>
 #include <cstdio>
+#include <cstring>
 #include <memory>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -28,18 +32,32 @@ constexpr std::size_t statusMax = 256;
 constexpr std::size_t nameMax = 128;
 constexpr char offlineStatus[] = "Open Steam and relaunch";
 constexpr char unknownName[] = "(unknown)";
-constexpr char hintCreate[] =
-    "You: C to host. Friend: J to join (do not use the Steam invite overlay).";
-constexpr char hintInvite[] = "Lobby up. Friend presses J. Overlay invite (I) can crash their game.";
+constexpr char hintCreate[] = "You: C to host. Friend: J to join. You must be Steam friends.";
+constexpr char hintHost[] = "Lobby up. Friend presses J.";
 constexpr char hintOffline[] = "Open Steam and relaunch before creating a lobby.";
 constexpr char hintNoLobby[] = "No friend lobby yet. They press C first. You must be Steam friends.";
 
 bool g_ok = false;
 std::array<char, statusMax> g_status{};
 
+void CopyAscii(char *dst, std::size_t dstSize, const char *src)
+{
+    if (dst == nullptr || dstSize == 0) {
+        return;
+    }
+    std::size_t out = 0;
+    if (src != nullptr) {
+        for (std::size_t i = 0; src[i] != '\0' && out + 1 < dstSize; ++i) {
+            const unsigned char ch = static_cast<unsigned char>(src[i]);
+            dst[out++] = (ch >= 32 && ch < 127) ? static_cast<char>(ch) : '?';
+        }
+    }
+    dst[out] = '\0';
+}
+
 void SetStatus(const char *text)
 {
-    std::snprintf(g_status.data(), g_status.size(), "%s", text);
+    CopyAscii(g_status.data(), g_status.size(), text);
 }
 
 class SteamSession {
@@ -59,19 +77,7 @@ public:
         const SteamAPICall_t call =
             matchmaking->CreateLobby(k_ELobbyTypeFriendsOnly, hh::MAX_PLAYERS);
         lobbyCreated.Set(call, this, &SteamSession::OnLobbyCreated);
-        SetHint(hintInvite);
-    }
-
-    void OpenInviteDialog()
-    {
-        if (!inLobby || !lobbyId.IsValid()) {
-            return;
-        }
-        ISteamFriends *friends = SteamFriends();
-        if (friends == nullptr) {
-            return;
-        }
-        friends->ActivateGameOverlayInviteDialog(lobbyId);
+        SetHint(hintHost);
     }
 
     void JoinFriendLobby()
@@ -88,9 +94,15 @@ public:
             appId = utils->GetAppID();
         }
 
-        const int friendCount = friends->GetFriendCount(k_EFriendFlagImmediate);
+        int friendCount = friends->GetFriendCount(k_EFriendFlagImmediate);
+        if (friendCount < 0) {
+            friendCount = 0;
+        }
         for (int i = 0; i < friendCount; ++i) {
             const CSteamID friendId = friends->GetFriendByIndex(i, k_EFriendFlagImmediate);
+            if (!friendId.IsValid()) {
+                continue;
+            }
             FriendGameInfo_t gameInfo{};
             if (!friends->GetFriendGamePlayed(friendId, &gameInfo)) {
                 continue;
@@ -177,7 +189,7 @@ public:
 private:
     void SetHint(const char *text)
     {
-        std::snprintf(hint.data(), hint.size(), "%s", text);
+        CopyAscii(hint.data(), hint.size(), text);
     }
 
     void QueueJoin(CSteamID id)
@@ -219,7 +231,7 @@ private:
                     name = persona;
                 }
             }
-            std::snprintf(nextNames[static_cast<std::size_t>(i)].data(), nameMax, "%s", name);
+            CopyAscii(nextNames[static_cast<std::size_t>(i)].data(), nameMax, name);
         }
         memberNames = nextNames;
         memberCount = count;
@@ -234,13 +246,12 @@ private:
         lobbyId = CSteamID(result->m_ulSteamIDLobby);
         inLobby = lobbyId.IsValid();
         pendingRefresh = true;
-        SetHint(hintInvite);
+        SetHint(hintHost);
     }
 
     STEAM_CALLBACK(SteamSession, OnLobbyEnter, LobbyEnter_t);
     STEAM_CALLBACK(SteamSession, OnLobbyChatUpdate, LobbyChatUpdate_t);
     STEAM_CALLBACK(SteamSession, OnJoinRequested, GameLobbyJoinRequested_t);
-    STEAM_CALLBACK(SteamSession, OnPersonaChange, PersonaStateChange_t);
 
     CCallResult<SteamSession, LobbyCreated_t> lobbyCreated;
     CSteamID lobbyId;
@@ -263,7 +274,7 @@ void SteamSession::OnLobbyEnter(LobbyEnter_t *callback)
     lobbyId = CSteamID(callback->m_ulSteamIDLobby);
     inLobby = lobbyId.IsValid();
     pendingRefresh = true;
-    SetHint(hintInvite);
+    SetHint(hintHost);
 }
 
 void SteamSession::OnLobbyChatUpdate(LobbyChatUpdate_t *callback)
@@ -282,20 +293,31 @@ void SteamSession::OnJoinRequested(GameLobbyJoinRequested_t *callback)
     QueueJoin(callback->m_steamIDLobby);
 }
 
-void SteamSession::OnPersonaChange(PersonaStateChange_t *callback)
-{
-    (void)callback;
-    if (inLobby) {
-        pendingRefresh = true;
-    }
-}
-
 std::unique_ptr<SteamSession> g_session;
 
 } // namespace
 
+void SteamUseExeDirectory()
+{
+#ifdef _WIN32
+    char path[MAX_PATH];
+    if (GetModuleFileNameA(nullptr, path, MAX_PATH) == 0) {
+        return;
+    }
+    char *slash = std::strrchr(path, '\\');
+    if (slash != nullptr) {
+        *slash = '\0';
+        SetCurrentDirectoryA(path);
+    }
+#endif
+}
+
 bool SteamInit()
 {
+#ifdef _WIN32
+    SetEnvironmentVariableA("DISABLESTEAMOVERLAY", "1");
+#endif
+
     g_ok = SteamAPI_Init();
     if (!g_ok) {
         SetStatus(offlineStatus);
@@ -314,7 +336,9 @@ bool SteamInit()
     if (name == nullptr || name[0] == '\0') {
         name = unknownName;
     }
-    std::snprintf(g_status.data(), g_status.size(), "Steam: %s", name);
+    char line[statusMax];
+    std::snprintf(line, sizeof(line), "Steam: %s", name);
+    SetStatus(line);
     g_session = std::make_unique<SteamSession>();
     return true;
 }
@@ -362,14 +386,6 @@ void SteamCreateLobby()
         return;
     }
     g_session->CreateFriendsLobby();
-}
-
-void SteamOpenInvite()
-{
-    if (g_session == nullptr) {
-        return;
-    }
-    g_session->OpenInviteDialog();
 }
 
 void SteamJoinFriendLobby()

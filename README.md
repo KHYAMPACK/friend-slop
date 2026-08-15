@@ -42,8 +42,10 @@ First configure downloads Raylib (needs network once). Steam must be **open and 
 Both of you: Steam open, **Steam friends**, same source pulled, both windows already running.
 
 1. You press **C** (host). Your name appears under `In lobby`.
-2. Friend presses **J** (join). Do **not** use **I** / overlay invite — that can crash the joiner.
+2. Friend presses **J** (join). Do not use Steam overlay invites.
 3. Both windows should list **two names**.
+
+If his IDE prints `0xC0000005`, he should pull this, **delete his build folder**, reconfigure CMake, rebuild, then run `heart_house.exe` directly (not the debugger). Steam overlay + Debug CRT crashes on some PCs.
 
 No movement sync yet — names only.
 

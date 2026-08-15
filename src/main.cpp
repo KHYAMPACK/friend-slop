@@ -16,10 +16,12 @@ int main()
     constexpr int titleSize = 32;
     constexpr int bodySize = 20;
 
-    SteamInit();
-
+    SteamUseExeDirectory();
+    SetConfigFlags(FLAG_VSYNC_HINT);
     InitWindow(hh::WINDOW_WIDTH, hh::WINDOW_HEIGHT, "Heart House");
     SetTargetFPS(hh::TARGET_FPS);
+
+    SteamInit();
 
     while (!WindowShouldClose()) {
         SteamTick();
@@ -31,16 +33,12 @@ int main()
             if (IsKeyPressed(KEY_J)) {
                 SteamJoinFriendLobby();
             }
-            if (IsKeyPressed(KEY_I)) {
-                SteamOpenInvite();
-            }
         }
 
         BeginDrawing();
         ClearBackground(clearColor);
         DrawText("Heart House", padX, titleY, titleSize, RAYWHITE);
-        DrawText("C = host lobby. J = join friend. Skip I (overlay invite can crash the joiner).",
-            padX, hintY, bodySize, GRAY);
+        DrawText("C = host lobby. J = join friend.", padX, hintY, bodySize, GRAY);
         DrawText(SteamStatusLine(), padX, steamY, bodySize, RAYWHITE);
         DrawText(SteamLobbyHint(), padX, lobbyHintY, bodySize, GRAY);
 
@@ -56,7 +54,7 @@ int main()
         EndDrawing();
     }
 
-    CloseWindow();
     SteamShutdown();
+    CloseWindow();
     return 0;
 }
