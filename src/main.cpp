@@ -1,10 +1,7 @@
-/* Heart House — entry. Owns the window and main loop until phase switching lives here. */
-#include "core/game_constants.h"
-#include "raylib.h"
+#include <raylib.h>
 
-int main()
-{
-    InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Heart House");
+int main() {
+    InitWindow(960, 800, "Heart House");
     SetTargetFPS(60);
 
     while (!WindowShouldClose()) {
