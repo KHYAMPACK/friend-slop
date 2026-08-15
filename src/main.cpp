@@ -28,6 +28,9 @@ int main()
             if (IsKeyPressed(KEY_C)) {
                 SteamCreateLobby();
             }
+            if (IsKeyPressed(KEY_J)) {
+                SteamJoinFriendLobby();
+            }
             if (IsKeyPressed(KEY_I)) {
                 SteamOpenInvite();
             }
@@ -36,8 +39,8 @@ int main()
         BeginDrawing();
         ClearBackground(clearColor);
         DrawText("Heart House", padX, titleY, titleSize, RAYWHITE);
-        DrawText("C = create lobby. I = invite friend. Both windows must already be open.", padX,
-            hintY, bodySize, GRAY);
+        DrawText("C = host lobby. J = join friend. Skip I (overlay invite can crash the joiner).",
+            padX, hintY, bodySize, GRAY);
         DrawText(SteamStatusLine(), padX, steamY, bodySize, RAYWHITE);
         DrawText(SteamLobbyHint(), padX, lobbyHintY, bodySize, GRAY);
 

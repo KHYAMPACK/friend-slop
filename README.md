@@ -39,14 +39,13 @@ First configure downloads Raylib (needs network once). Steam must be **open and 
 
 ## Test seeing your friend’s name
 
-Both of you: Steam open, same source pulled, both windows **already running**. Then:
+Both of you: Steam open, **Steam friends**, same source pulled, both windows already running.
 
-1. You press **C** (create lobby). Your name appears under `In lobby`.
-2. You press **I** (Steam invite overlay). Pick your friend.
-3. Friend accepts the invite in Steam (do not let Steam start the real Spacewar game).
-4. Both windows should list **two names**.
+1. You press **C** (host). Your name appears under `In lobby`.
+2. Friend presses **J** (join). Do **not** use **I** / overlay invite — that can crash the joiner.
+3. Both windows should list **two names**.
 
-If the friend is not already in Heart House, Steam may launch Valve’s Spacewar instead (App ID 480). No movement sync yet — names only.
+No movement sync yet — names only.
 
 ## Two-person workflow
 
