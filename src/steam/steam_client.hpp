@@ -12,6 +12,7 @@ void SteamShutdown();
 
 void SteamCreateLobby();
 void SteamOpenInvite();
+void SteamJoinFriendLobby();
 [[nodiscard]] bool SteamInLobby();
 [[nodiscard]] int SteamLobbyMemberCount();
 [[nodiscard]] const char *SteamLobbyMemberName(int index);

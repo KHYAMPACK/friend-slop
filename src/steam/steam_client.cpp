@@ -1,5 +1,8 @@
 /* SteamAPI init / tick / shutdown, friends lobby for seeing names.
  * Area: steam. No movement sync, no RestartAppIfNecessary.
+ *
+ * Steam callbacks must not call Leave/Join/RequestUserInformation inline — that
+ * crashed the joining client. Queue work and flush after RunCallbacks.
  */
 
 #include "steam/steam_client.hpp"
@@ -25,9 +28,11 @@ constexpr std::size_t statusMax = 256;
 constexpr std::size_t nameMax = 128;
 constexpr char offlineStatus[] = "Open Steam and relaunch";
 constexpr char unknownName[] = "(unknown)";
-constexpr char hintCreate[] = "Press C to create a lobby. Friend must already have this window open.";
-constexpr char hintInvite[] = "Press I to invite. Friend accepts in Steam overlay. Both games must be running.";
+constexpr char hintCreate[] =
+    "You: C to host. Friend: J to join (do not use the Steam invite overlay).";
+constexpr char hintInvite[] = "Lobby up. Friend presses J. Overlay invite (I) can crash their game.";
 constexpr char hintOffline[] = "Open Steam and relaunch before creating a lobby.";
+constexpr char hintNoLobby[] = "No friend lobby yet. They press C first. You must be Steam friends.";
 
 bool g_ok = false;
 std::array<char, statusMax> g_status{};
@@ -48,6 +53,7 @@ public:
         if (inLobby && lobbyId.IsValid()) {
             matchmaking->LeaveLobby(lobbyId);
             inLobby = false;
+            memberCount = 0;
             lobbyId.Clear();
         }
         const SteamAPICall_t call =
@@ -66,6 +72,69 @@ public:
             return;
         }
         friends->ActivateGameOverlayInviteDialog(lobbyId);
+    }
+
+    void JoinFriendLobby()
+    {
+        ISteamFriends *friends = SteamFriends();
+        if (friends == nullptr) {
+            SetHint(hintNoLobby);
+            return;
+        }
+
+        uint32 appId = 480;
+        ISteamUtils *utils = SteamUtils();
+        if (utils != nullptr) {
+            appId = utils->GetAppID();
+        }
+
+        const int friendCount = friends->GetFriendCount(k_EFriendFlagImmediate);
+        for (int i = 0; i < friendCount; ++i) {
+            const CSteamID friendId = friends->GetFriendByIndex(i, k_EFriendFlagImmediate);
+            FriendGameInfo_t gameInfo{};
+            if (!friends->GetFriendGamePlayed(friendId, &gameInfo)) {
+                continue;
+            }
+            if (!gameInfo.m_steamIDLobby.IsValid()) {
+                continue;
+            }
+            if (gameInfo.m_gameID.AppID() != appId) {
+                continue;
+            }
+            QueueJoin(gameInfo.m_steamIDLobby);
+            SetHint("Joining friend's lobby...");
+            return;
+        }
+        SetHint(hintNoLobby);
+    }
+
+    void FlushPending()
+    {
+        ISteamMatchmaking *matchmaking = SteamMatchmaking();
+        if (pendingLeave) {
+            pendingLeave = false;
+            if (matchmaking != nullptr && inLobby && lobbyId.IsValid()) {
+                matchmaking->LeaveLobby(lobbyId);
+            }
+            inLobby = false;
+            memberCount = 0;
+            lobbyId.Clear();
+            if (pendingJoin) {
+                return;
+            }
+        }
+        if (pendingJoin) {
+            pendingJoin = false;
+            if (matchmaking != nullptr && pendingJoinId.IsValid()) {
+                matchmaking->JoinLobby(pendingJoinId);
+            }
+            pendingJoinId.Clear();
+            return;
+        }
+        if (pendingRefresh) {
+            pendingRefresh = false;
+            RefreshMembers();
+        }
     }
 
     [[nodiscard]] bool InLobby() const
@@ -100,6 +169,9 @@ public:
         inLobby = false;
         lobbyId.Clear();
         memberCount = 0;
+        pendingJoin = false;
+        pendingLeave = false;
+        pendingRefresh = false;
     }
 
 private:
@@ -108,28 +180,48 @@ private:
         std::snprintf(hint.data(), hint.size(), "%s", text);
     }
 
+    void QueueJoin(CSteamID id)
+    {
+        if (!id.IsValid()) {
+            return;
+        }
+        if (inLobby && lobbyId.IsValid() && lobbyId != id) {
+            pendingLeave = true;
+        }
+        pendingJoinId = id;
+        pendingJoin = true;
+    }
+
     void RefreshMembers()
     {
-        memberCount = 0;
         ISteamMatchmaking *matchmaking = SteamMatchmaking();
         ISteamFriends *friends = SteamFriends();
-        if (matchmaking == nullptr || friends == nullptr || !lobbyId.IsValid()) {
+        if (matchmaking == nullptr || friends == nullptr || !inLobby || !lobbyId.IsValid()) {
+            memberCount = 0;
             return;
         }
 
         int count = matchmaking->GetNumLobbyMembers(lobbyId);
+        if (count < 0) {
+            count = 0;
+        }
         if (count > hh::MAX_PLAYERS) {
             count = hh::MAX_PLAYERS;
         }
+
+        std::array<std::array<char, nameMax>, hh::MAX_PLAYERS> nextNames{};
         for (int i = 0; i < count; ++i) {
             const CSteamID id = matchmaking->GetLobbyMemberByIndex(lobbyId, i);
-            friends->RequestUserInformation(id, true);
-            const char *name = friends->GetFriendPersonaName(id);
-            if (name == nullptr || name[0] == '\0') {
-                name = unknownName;
+            const char *name = unknownName;
+            if (id.IsValid()) {
+                const char *persona = friends->GetFriendPersonaName(id);
+                if (persona != nullptr && persona[0] != '\0') {
+                    name = persona;
+                }
             }
-            std::snprintf(memberNames[static_cast<std::size_t>(i)].data(), nameMax, "%s", name);
+            std::snprintf(nextNames[static_cast<std::size_t>(i)].data(), nameMax, "%s", name);
         }
+        memberNames = nextNames;
         memberCount = count;
     }
 
@@ -140,8 +232,8 @@ private:
             return;
         }
         lobbyId = CSteamID(result->m_ulSteamIDLobby);
-        inLobby = true;
-        RefreshMembers();
+        inLobby = lobbyId.IsValid();
+        pendingRefresh = true;
         SetHint(hintInvite);
     }
 
@@ -152,7 +244,11 @@ private:
 
     CCallResult<SteamSession, LobbyCreated_t> lobbyCreated;
     CSteamID lobbyId;
+    CSteamID pendingJoinId;
     bool inLobby = false;
+    bool pendingJoin = false;
+    bool pendingLeave = false;
+    bool pendingRefresh = false;
     int memberCount = 0;
     std::array<std::array<char, nameMax>, hh::MAX_PLAYERS> memberNames{};
     std::array<char, statusMax> hint{};
@@ -165,8 +261,8 @@ void SteamSession::OnLobbyEnter(LobbyEnter_t *callback)
         return;
     }
     lobbyId = CSteamID(callback->m_ulSteamIDLobby);
-    inLobby = true;
-    RefreshMembers();
+    inLobby = lobbyId.IsValid();
+    pendingRefresh = true;
     SetHint(hintInvite);
 }
 
@@ -175,7 +271,7 @@ void SteamSession::OnLobbyChatUpdate(LobbyChatUpdate_t *callback)
     if (callback == nullptr) {
         return;
     }
-    RefreshMembers();
+    pendingRefresh = true;
 }
 
 void SteamSession::OnJoinRequested(GameLobbyJoinRequested_t *callback)
@@ -183,22 +279,14 @@ void SteamSession::OnJoinRequested(GameLobbyJoinRequested_t *callback)
     if (callback == nullptr) {
         return;
     }
-    ISteamMatchmaking *matchmaking = SteamMatchmaking();
-    if (matchmaking == nullptr) {
-        return;
-    }
-    if (inLobby && lobbyId.IsValid()) {
-        matchmaking->LeaveLobby(lobbyId);
-        inLobby = false;
-    }
-    matchmaking->JoinLobby(callback->m_steamIDLobby);
+    QueueJoin(callback->m_steamIDLobby);
 }
 
 void SteamSession::OnPersonaChange(PersonaStateChange_t *callback)
 {
     (void)callback;
     if (inLobby) {
-        RefreshMembers();
+        pendingRefresh = true;
     }
 }
 
@@ -237,6 +325,9 @@ void SteamTick()
         return;
     }
     SteamAPI_RunCallbacks();
+    if (g_session != nullptr) {
+        g_session->FlushPending();
+    }
 }
 
 void SteamShutdown()
@@ -279,6 +370,14 @@ void SteamOpenInvite()
         return;
     }
     g_session->OpenInviteDialog();
+}
+
+void SteamJoinFriendLobby()
+{
+    if (g_session == nullptr) {
+        return;
+    }
+    g_session->JoinFriendLobby();
 }
 
 bool SteamInLobby()
