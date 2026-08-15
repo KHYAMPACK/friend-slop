@@ -337,6 +337,8 @@ int main()
     constexpr int screenWidth = 1280;
     constexpr int screenHeight = 720;
 
+    SteamPrepareLaunch();
+
     InitWindow(
         screenWidth,
         screenHeight,
@@ -383,6 +385,11 @@ int main()
     {
         PeerNetwork network;
 
+        const std::string ownName =
+            SteamFriends() != nullptr &&
+                    SteamFriends()->GetPersonaName() != nullptr
+                ? SteamFriends()->GetPersonaName()
+                : "(unknown)";
         const std::string ownSteamID =
             std::to_string(
                 SteamUser()->GetSteamID().ConvertToUint64()
@@ -649,9 +656,17 @@ int main()
                 );
 
                 DrawText(
-                    "Send this SteamID64 to the other player:",
+                    ownName.c_str(),
                     60,
-                    120,
+                    110,
+                    22,
+                    WHITE
+                );
+
+                DrawText(
+                    "Send this SteamID64 (starts with 7656119):",
+                    60,
+                    145,
                     20,
                     GRAY
                 );
@@ -659,7 +674,7 @@ int main()
                 DrawText(
                     ownSteamID.c_str(),
                     60,
-                    160,
+                    180,
                     36,
                     YELLOW
                 );
@@ -667,7 +682,7 @@ int main()
                 DrawText(
                     network.Status().c_str(),
                     60,
-                    230,
+                    250,
                     20,
                     WHITE
                 );

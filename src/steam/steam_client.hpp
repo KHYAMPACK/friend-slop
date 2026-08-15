@@ -4,6 +4,7 @@
  * Area: steam. No movement sync, no RestartAppIfNecessary, no overlay.
  */
 
+void SteamPrepareLaunch();
 bool SteamInit();
 void SteamUseExeDirectory();
 void SteamTick();

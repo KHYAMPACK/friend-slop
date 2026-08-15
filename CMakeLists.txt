@@ -63,6 +63,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     "${STEAMWORKS_BIN}/steam_api64.lib"
 )
 
+# Delay-load Steam so DISABLESTEAMOVERLAY can be set in main before the DLL
+# injects GameOverlayRenderer (OpenGL 0xC0000005 on some PCs).
+if(MSVC)
+    target_link_libraries(${PROJECT_NAME} PRIVATE delayimp)
+    target_link_options(${PROJECT_NAME} PRIVATE /DELAYLOAD:steam_api64.dll)
+endif()
+
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${STEAMWORKS_BIN}/steam_api64.dll"

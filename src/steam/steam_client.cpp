@@ -320,6 +320,14 @@ void SteamUseExeDirectory()
 #endif
 }
 
+void SteamPrepareLaunch()
+{
+#ifdef _WIN32
+    SetEnvironmentVariableA("DISABLESTEAMOVERLAY", "1");
+#endif
+    SteamUseExeDirectory();
+}
+
 bool SteamInit()
 {
 #ifdef _WIN32
@@ -332,8 +340,10 @@ bool SteamInit()
         return false;
     }
 
+    ISteamUser *user = SteamUser();
     ISteamFriends *friends = SteamFriends();
-    if (friends == nullptr) {
+    if (user == nullptr || friends == nullptr ||
+        !user->GetSteamID().BIndividualAccount()) {
         SetStatus(offlineStatus);
         SteamAPI_Shutdown();
         g_ok = false;
