@@ -7,7 +7,6 @@
 #include "core/game_constants.hpp"
 
 #include <array>
-#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -61,56 +60,11 @@ void SetStatus(const char *text)
     CopyAscii(g_status.data(), g_status.size(), text);
 }
 
-// #region agent log
-void AgentLog(const char *hypothesisId, const char *location, const char *message, const char *dataJson)
-{
-#ifdef _WIN32
-    const unsigned long long ts = GetTickCount64();
-#else
-    const unsigned long long ts = 0;
-#endif
-    char line[1024];
-    std::snprintf(line, sizeof(line),
-        "{\"sessionId\":\"0efb11\",\"runId\":\"run1\",\"hypothesisId\":\"%s\","
-        "\"location\":\"%s\",\"message\":\"%s\",\"data\":%s,\"timestamp\":%llu}\n",
-        hypothesisId, location, message, dataJson, ts);
-    const char *paths[] = {
-        "c:\\Users\\Mert\\OneDrive\\Desktop\\Projects\\hh\\debug-0efb11.log",
-        "debug-0efb11.log",
-    };
-    for (const char *path : paths) {
-        FILE *file = nullptr;
-#ifdef _MSC_VER
-        if (fopen_s(&file, path, "a") != 0 || file == nullptr) {
-            continue;
-        }
-#else
-        file = std::fopen(path, "a");
-        if (file == nullptr) {
-            continue;
-        }
-#endif
-        std::fputs(line, file);
-        std::fclose(file);
-    }
-}
-// #endregion
-
 class SteamSession {
 public:
     void CreateFriendsLobby()
     {
         ISteamMatchmaking *matchmaking = SteamMatchmaking();
-        // #region agent log
-        {
-            char data[192];
-            std::snprintf(data, sizeof(data),
-                "{\"matchmaking\":%llu,\"inLobby\":%s}",
-                static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(matchmaking)),
-                inLobby ? "true" : "false");
-            AgentLog("D", "steam_client.cpp:CreateFriendsLobby", "create lobby enter", data);
-        }
-        // #endregion
         if (matchmaking == nullptr) {
             return;
         }
@@ -123,14 +77,6 @@ public:
         const SteamAPICall_t call =
             matchmaking->CreateLobby(k_ELobbyTypeFriendsOnly, hh::MAX_PLAYERS);
         lobbyCreated.Set(call, this, &SteamSession::OnLobbyCreated);
-        // #region agent log
-        {
-            char data[128];
-            std::snprintf(data, sizeof(data), "{\"call\":%llu}",
-                static_cast<unsigned long long>(call));
-            AgentLog("D", "steam_client.cpp:CreateFriendsLobby", "create lobby issued", data);
-        }
-        // #endregion
         SetHint(hintHost);
     }
 
@@ -144,37 +90,14 @@ public:
 
         uint32 appId = 480;
         ISteamUtils *utils = SteamUtils();
-        // #region agent log
-        {
-            char data[192];
-            std::snprintf(data, sizeof(data), "{\"friends\":%llu,\"utils\":%llu}",
-                static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(friends)),
-                static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(utils)));
-            AgentLog("A", "steam_client.cpp:JoinFriendLobby", "before GetAppID", data);
-        }
-        // #endregion
         if (utils != nullptr) {
             appId = utils->GetAppID();
         }
-        // #region agent log
-        {
-            char data[96];
-            std::snprintf(data, sizeof(data), "{\"appId\":%u}", static_cast<unsigned>(appId));
-            AgentLog("A", "steam_client.cpp:JoinFriendLobby", "after GetAppID", data);
-        }
-        // #endregion
 
         int friendCount = friends->GetFriendCount(k_EFriendFlagImmediate);
         if (friendCount < 0) {
             friendCount = 0;
         }
-        // #region agent log
-        {
-            char data[96];
-            std::snprintf(data, sizeof(data), "{\"friendCount\":%d}", friendCount);
-            AgentLog("C", "steam_client.cpp:JoinFriendLobby", "friend count", data);
-        }
-        // #endregion
         for (int i = 0; i < friendCount; ++i) {
             const CSteamID friendId = friends->GetFriendByIndex(i, k_EFriendFlagImmediate);
             if (!friendId.IsValid()) {
@@ -187,25 +110,7 @@ public:
             if (!gameInfo.m_steamIDLobby.IsValid()) {
                 continue;
             }
-            // #region agent log
-            {
-                char data[96];
-                std::snprintf(data, sizeof(data), "{\"i\":%d,\"lobbyValid\":true}", i);
-                AgentLog("B", "steam_client.cpp:JoinFriendLobby", "before CGameID::AppID", data);
-            }
-            // #endregion
-            const uint32 friendApp = gameInfo.m_gameID.AppID();
-            // #region agent log
-            {
-                char data[192];
-                std::snprintf(data, sizeof(data),
-                    "{\"i\":%d,\"friendApp\":%u,\"wantApp\":%u,\"lobbyValid\":%s}", i,
-                    static_cast<unsigned>(friendApp), static_cast<unsigned>(appId),
-                    gameInfo.m_steamIDLobby.IsValid() ? "true" : "false");
-                AgentLog("B", "steam_client.cpp:JoinFriendLobby", "friend game info", data);
-            }
-            // #endregion
-            if (friendApp != appId) {
+            if (gameInfo.m_gameID.AppID() != appId) {
                 continue;
             }
             QueueJoin(gameInfo.m_steamIDLobby);
@@ -334,15 +239,6 @@ private:
 
     void OnLobbyCreated(LobbyCreated_t *result, bool ioFailure)
     {
-        // #region agent log
-        {
-            char data[192];
-            std::snprintf(data, sizeof(data), "{\"ioFailure\":%s,\"resultPtr\":%s,\"eResult\":%d}",
-                ioFailure ? "true" : "false", result != nullptr ? "true" : "false",
-                result != nullptr ? static_cast<int>(result->m_eResult) : -1);
-            AgentLog("D", "steam_client.cpp:OnLobbyCreated", "lobby created callback", data);
-        }
-        // #endregion
         if (ioFailure || result == nullptr || result->m_eResult != k_EResultOK) {
             SetHint("Lobby create failed. Is Steam running?");
             return;
@@ -371,15 +267,6 @@ private:
 
 void SteamSession::OnLobbyEnter(LobbyEnter_t *callback)
 {
-    // #region agent log
-    {
-        char data[128];
-        std::snprintf(data, sizeof(data), "{\"callback\":%s,\"response\":%d}",
-            callback != nullptr ? "true" : "false",
-            callback != nullptr ? static_cast<int>(callback->m_EChatRoomEnterResponse) : -1);
-        AgentLog("D", "steam_client.cpp:OnLobbyEnter", "lobby enter callback", data);
-    }
-    // #endregion
     if (callback == nullptr || callback->m_EChatRoomEnterResponse != k_EChatRoomEnterResponseSuccess) {
         SetHint("Could not enter lobby.");
         return;
@@ -432,15 +319,6 @@ bool SteamInit()
 #endif
 
     g_ok = SteamAPI_Init();
-    ISteamUtils *utilsAtInit = g_ok ? SteamUtils() : nullptr;
-    // #region agent log
-    {
-        char data[192];
-        std::snprintf(data, sizeof(data), "{\"g_ok\":%s,\"utils\":%llu}", g_ok ? "true" : "false",
-            static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(utilsAtInit)));
-        AgentLog("E", "steam_client.cpp:SteamInit", "steam init", data);
-    }
-    // #endregion
     if (!g_ok) {
         SetStatus(offlineStatus);
         return false;
