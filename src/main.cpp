@@ -1,8 +1,9 @@
 #include <raylib.h>
 #include <raymath.h>
 
-#include "steam/steam_client.hpp"
 #include "core/game_constants.hpp"
+#include "maps/house/house.hpp"
+#include "steam/steam_client.hpp"
 
 #include <steam/steam_api.h>
 
@@ -311,13 +312,37 @@ void PeerNetwork::OnConnectionStatusChanged(
     }
 }
 
+constexpr float TOP_DOWN_HEIGHT = 80.0f;
+constexpr float TOP_DOWN_FOVY_MIN = 16.0f;
+constexpr float TOP_DOWN_FOVY_MAX = 160.0f;
+constexpr float TOP_DOWN_FOVY_DEFAULT = 48.0f;
+
 enum class GameScreen
 {
     Menu,
     Hosting,
     Connecting,
-    Playing
+    Playing,
+    MapBuilder
 };
+
+void SetBuilderTopDown(Camera3D& camera, const bool enabled, const float topDownFovy)
+{
+    if (enabled) {
+        camera.projection = CAMERA_ORTHOGRAPHIC;
+        camera.fovy = topDownFovy;
+        camera.up = {0.0f, 0.0f, -1.0f};
+        camera.position.y = TOP_DOWN_HEIGHT;
+        camera.target = {camera.position.x, 0.0f, camera.position.z};
+        EnableCursor();
+    } else {
+        camera.projection = CAMERA_PERSPECTIVE;
+        camera.fovy = 75.0f;
+        camera.up = {0.0f, 1.0f, 0.0f};
+        camera.position.y = PLAYER_EYE_HEIGHT;
+        DisableCursor();
+    }
+}
 
 } // namespace
 
@@ -409,13 +434,15 @@ int main()
             );
 
         Camera3D camera{};
-        camera.position = {-3.0f, PLAYER_EYE_HEIGHT, 0.0f};
-        camera.target = {-3.0f, PLAYER_EYE_HEIGHT, 1.0f};
+        camera.position = House::SpawnPosition(true, PLAYER_EYE_HEIGHT);
+        camera.target = Vector3Add(camera.position, {0.0f, 0.0f, 1.0f});
         camera.up = {0.0f, 1.0f, 0.0f};
         camera.fovy = 75.0f;
         camera.projection = CAMERA_PERSPECTIVE;
 
         GameScreen currentScreen = GameScreen::Menu;
+
+        House::Load();
 
         bool p2pJoinStarted = false;
 
@@ -428,6 +455,8 @@ int main()
         float sendTimer = 0.0f;
 
         bool cursorLocked = false;
+        bool builderTopDown = false;
+        float topDownFovy = TOP_DOWN_FOVY_DEFAULT;
 
         while (!WindowShouldClose())
         {
@@ -443,11 +472,9 @@ int main()
                 const std::uint64_t ownerSteamID = HhSteam::LobbyOwnerID64();
                 if (ownerSteamID != 0 && network.ConnectToHost(ownerSteamID))
                 {
-                    camera.position = {
-                        3.0f,
-                        PLAYER_EYE_HEIGHT,
-                        0.0f
-                    };
+                    camera.position = House::SpawnPosition(false, PLAYER_EYE_HEIGHT);
+                    yaw = 0.0f;
+                    pitch = 0.0f;
                     p2pJoinStarted = true;
                     currentScreen = GameScreen::Connecting;
                 }
@@ -464,7 +491,8 @@ int main()
             }
 
             if (currentScreen == GameScreen::Playing &&
-                !network.Connected())
+                !network.Connected() &&
+                (network.Hosting() || p2pJoinStarted))
             {
                 if (cursorLocked)
                 {
@@ -481,13 +509,33 @@ int main()
 
             if (currentScreen == GameScreen::Menu)
             {
+                if (IsKeyPressed(KEY_B))
+                {
+                    camera.position = House::SpawnPosition(true, PLAYER_EYE_HEIGHT);
+                    yaw = 0.0f;
+                    pitch = 0.0f;
+                    currentScreen = GameScreen::MapBuilder;
+                    builderTopDown = true;
+                    topDownFovy = TOP_DOWN_FOVY_DEFAULT;
+                    SetBuilderTopDown(camera, true, topDownFovy);
+                    cursorLocked = false;
+                }
+
+                if (IsKeyPressed(KEY_P))
+                {
+                    camera.position = House::SpawnPosition(true, PLAYER_EYE_HEIGHT);
+                    yaw = 0.0f;
+                    pitch = 0.0f;
+                    currentScreen = GameScreen::Playing;
+                    DisableCursor();
+                    cursorLocked = true;
+                }
+
                 if (IsKeyPressed(KEY_C))
                 {
-                    camera.position = {
-                        -3.0f,
-                        PLAYER_EYE_HEIGHT,
-                        0.0f
-                    };
+                    camera.position = House::SpawnPosition(true, PLAYER_EYE_HEIGHT);
+                    yaw = 0.0f;
+                    pitch = 0.0f;
 
                     if (network.StartHost())
                     {
@@ -500,91 +548,173 @@ int main()
                 {
                     if (HhSteam::JoinFriendLobby())
                     {
-                        camera.position = {
-                            3.0f,
-                            PLAYER_EYE_HEIGHT,
-                            0.0f
-                        };
+                        camera.position = House::SpawnPosition(false, PLAYER_EYE_HEIGHT);
+                        yaw = 0.0f;
+                        pitch = 0.0f;
                         p2pJoinStarted = false;
                         currentScreen = GameScreen::Connecting;
                     }
                 }
             }
-            else if (currentScreen == GameScreen::Playing)
+            else if (currentScreen == GameScreen::Playing ||
+                     currentScreen == GameScreen::MapBuilder)
             {
                 const float deltaTime = GetFrameTime();
-                const Vector2 mouseDelta = GetMouseDelta();
+                const bool topDownBuilder =
+                    currentScreen == GameScreen::MapBuilder && builderTopDown;
+                const Rectangle topDownButton{20, 78, 188, 36};
 
-                yaw -= mouseDelta.x * MOUSE_SENSITIVITY;
-                pitch -= mouseDelta.y * MOUSE_SENSITIVITY;
-                pitch = Clamp(pitch, -1.5f, 1.5f);
-
-                const Vector3 lookDirection = {
-                    std::sin(yaw) * std::cos(pitch),
-                    std::sin(pitch),
-                    std::cos(yaw) * std::cos(pitch)
-                };
-
-                const Vector3 forward = {
-                    std::sin(yaw),
-                    0.0f,
-                    std::cos(yaw)
-                };
-
-                const Vector3 right = {
-                    std::cos(yaw),
-                    0.0f,
-                    -std::sin(yaw)
-                };
-
-                Vector3 movement{};
-
-                if (IsKeyDown(KEY_W))
-                    movement = Vector3Add(movement, forward);
-
-                if (IsKeyDown(KEY_S))
-                    movement = Vector3Subtract(movement, forward);
-
-                if (IsKeyDown(KEY_D))
-                    movement = Vector3Add(movement, right);
-
-                if (IsKeyDown(KEY_A))
-                    movement = Vector3Subtract(movement, right);
-
-                if (Vector3LengthSqr(movement) > 0.0f)
+                if (topDownBuilder)
                 {
-                    movement = Vector3Normalize(movement);
-                    movement = Vector3Scale(
-                        movement,
-                        MOVEMENT_SPEED * deltaTime
-                    );
+                    topDownFovy -= GetMouseWheelMove() * 6.0f;
+                    topDownFovy = Clamp(topDownFovy, TOP_DOWN_FOVY_MIN, TOP_DOWN_FOVY_MAX);
+                    camera.fovy = topDownFovy;
 
-                    camera.position =
-                        Vector3Add(camera.position, movement);
+                    Vector3 pan{};
+                    if (IsKeyDown(KEY_W))
+                        pan.z -= 1.0f;
+                    if (IsKeyDown(KEY_S))
+                        pan.z += 1.0f;
+                    if (IsKeyDown(KEY_A))
+                        pan.x -= 1.0f;
+                    if (IsKeyDown(KEY_D))
+                        pan.x += 1.0f;
+
+                    if (Vector3LengthSqr(pan) > 0.0f)
+                    {
+                        pan = Vector3Normalize(pan);
+                        const float panSpeed = MOVEMENT_SPEED * (topDownFovy / 24.0f);
+                        pan = Vector3Scale(pan, panSpeed * deltaTime);
+                        camera.position.x += pan.x;
+                        camera.position.z += pan.z;
+                    }
+
+                    camera.position.y = TOP_DOWN_HEIGHT;
+                    camera.target = {camera.position.x, 0.0f, camera.position.z};
+                    camera.up = {0.0f, 0.0f, -1.0f};
+                }
+                else
+                {
+                    const Vector2 mouseDelta = GetMouseDelta();
+
+                    yaw -= mouseDelta.x * MOUSE_SENSITIVITY;
+                    pitch -= mouseDelta.y * MOUSE_SENSITIVITY;
+                    pitch = Clamp(pitch, -1.5f, 1.5f);
+
+                    const Vector3 lookDirection = {
+                        std::sin(yaw) * std::cos(pitch),
+                        std::sin(pitch),
+                        std::cos(yaw) * std::cos(pitch)
+                    };
+
+                    const Vector3 forward = {
+                        std::sin(yaw),
+                        0.0f,
+                        std::cos(yaw)
+                    };
+
+                    const Vector3 right = Vector3CrossProduct(camera.up, forward);
+
+                    Vector3 movement{};
+
+                    if (IsKeyDown(KEY_W))
+                        movement = Vector3Add(movement, forward);
+
+                    if (IsKeyDown(KEY_S))
+                        movement = Vector3Subtract(movement, forward);
+
+                    if (IsKeyDown(KEY_A))
+                        movement = Vector3Add(movement, right);
+
+                    if (IsKeyDown(KEY_D))
+                        movement = Vector3Subtract(movement, right);
+
+                    if (Vector3LengthSqr(movement) > 0.0f)
+                    {
+                        movement = Vector3Normalize(movement);
+                        movement = Vector3Scale(
+                            movement,
+                            MOVEMENT_SPEED * deltaTime
+                        );
+
+                        if (currentScreen == GameScreen::MapBuilder)
+                        {
+                            camera.position = Vector3Add(camera.position, movement);
+                        }
+                        else
+                        {
+                            camera.position = House::MovePlayer(camera.position, movement);
+                        }
+                    }
+
+                    camera.target =
+                        Vector3Add(camera.position, lookDirection);
                 }
 
-                camera.target =
-                    Vector3Add(camera.position, lookDirection);
-
-                sendTimer += deltaTime;
-
-                if (sendTimer >= SEND_INTERVAL)
+                if (currentScreen == GameScreen::MapBuilder)
                 {
-                    sendTimer = 0.0f;
+                    bool clickedUi = false;
+                    if (IsKeyPressed(KEY_T) ||
+                        (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+                         CheckCollisionPointRec(GetMousePosition(), topDownButton)))
+                    {
+                        builderTopDown = !builderTopDown;
+                        SetBuilderTopDown(camera, builderTopDown, topDownFovy);
+                        cursorLocked = !builderTopDown;
+                        clickedUi = true;
+                    }
 
-                    network.SendPosition(
-                        camera.position.x,
-                        camera.position.z
-                    );
+                    if (IsKeyPressed(KEY_ONE))
+                        House::SetKind(House::PieceKind::Wall);
+                    if (IsKeyPressed(KEY_TWO))
+                        House::SetKind(House::PieceKind::Floor);
+                    if (IsKeyPressed(KEY_R))
+                        House::RotatePiece();
+                    if (!clickedUi && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                        House::PlaceFromCamera(camera);
+                    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
+                        House::DeleteFromCamera(camera);
+                    if (IsKeyPressed(KEY_F5))
+                        House::Save();
+                    if (IsKeyPressed(KEY_ESCAPE))
+                    {
+                        builderTopDown = false;
+                        SetBuilderTopDown(camera, false, topDownFovy);
+                        currentScreen = GameScreen::Menu;
+                        EnableCursor();
+                        cursorLocked = false;
+                    }
                 }
+                else
+                {
+                    sendTimer += deltaTime;
 
-                if (network.ReceivePosition(remoteX, remoteZ))
-                    receivedRemotePosition = true;
+                    if (sendTimer >= SEND_INTERVAL)
+                    {
+                        sendTimer = 0.0f;
+
+                        network.SendPosition(
+                            camera.position.x,
+                            camera.position.z
+                        );
+                    }
+
+                    if (network.ReceivePosition(remoteX, remoteZ))
+                        receivedRemotePosition = true;
+
+                    if (IsKeyPressed(KEY_ESCAPE) && !network.Connected())
+                    {
+                        currentScreen = GameScreen::Menu;
+                        EnableCursor();
+                        cursorLocked = false;
+                    }
+                }
             }
 
             BeginDrawing();
 
-            if (currentScreen == GameScreen::Playing)
+            if (currentScreen == GameScreen::Playing ||
+                currentScreen == GameScreen::MapBuilder)
                 ClearBackground({120, 180, 235, 255});
             else
                 ClearBackground(BLACK);
@@ -592,7 +722,7 @@ int main()
             if (currentScreen == GameScreen::Menu)
             {
                 DrawText(
-                    "C - Host game",
+                    "B - Map builder",
                     60,
                     60,
                     30,
@@ -600,7 +730,7 @@ int main()
                 );
 
                 DrawText(
-                    "J - Join friend's lobby",
+                    "P - Walk the house (solo)",
                     60,
                     110,
                     30,
@@ -608,9 +738,25 @@ int main()
                 );
 
                 DrawText(
-                    HhSteam::LobbyHint(),
+                    "C - Host game",
                     60,
                     160,
+                    30,
+                    WHITE
+                );
+
+                DrawText(
+                    "J - Join friend's lobby",
+                    60,
+                    210,
+                    30,
+                    WHITE
+                );
+
+                DrawText(
+                    HhSteam::LobbyHint(),
+                    60,
+                    260,
                     20,
                     GRAY
                 );
@@ -618,7 +764,7 @@ int main()
                 DrawText(
                     network.Status().c_str(),
                     60,
-                    200,
+                    300,
                     20,
                     GRAY
                 );
@@ -695,17 +841,14 @@ int main()
                     WHITE
                 );
             }
-            else if (currentScreen == GameScreen::Playing)
+            else if (currentScreen == GameScreen::Playing ||
+                     currentScreen == GameScreen::MapBuilder)
             {
                 BeginMode3D(camera);
 
-                DrawPlane(
-                    {0.0f, 0.0f, 0.0f},
-                    {80.0f, 80.0f},
-                    {70, 140, 70, 255}
-                );
-
-                DrawGrid(80, 1.0f);
+                House::Draw();
+                if (currentScreen == GameScreen::MapBuilder)
+                    House::DrawBuilderPreview(camera);
 
                 if (receivedRemotePosition)
                 {
@@ -744,32 +887,64 @@ int main()
 
                 EndMode3D();
 
-                DrawText(
-                    network.Hosting() ? "HOST" : "CLIENT",
-                    20,
-                    20,
-                    22,
-                    WHITE
-                );
+                if (currentScreen == GameScreen::MapBuilder)
+                {
+                    const Rectangle topDownButton{20, 78, 188, 36};
+                    DrawText(
+                        "MAP BUILDER",
+                        20,
+                        20,
+                        22,
+                        WHITE
+                    );
+                    DrawText(
+                        House::BuilderHint(),
+                        20,
+                        50,
+                        18,
+                        RAYWHITE
+                    );
+                    DrawRectangleRec(topDownButton, {20, 20, 20, 220});
+                    DrawRectangleLinesEx(topDownButton, 2.0f, WHITE);
+                    DrawText(
+                        builderTopDown ? "FIRST PERSON (T)" : "TOP-DOWN (T)",
+                        static_cast<int>(topDownButton.x) + 10,
+                        static_cast<int>(topDownButton.y) + 8,
+                        18,
+                        WHITE
+                    );
+                }
+                else
+                {
+                    DrawText(
+                        network.Hosting() ? "HOST" : "CLIENT",
+                        20,
+                        20,
+                        22,
+                        WHITE
+                    );
+                }
 
                 DrawFPS(hh::WINDOW_WIDTH - 100, 20);
 
-                // Crosshair
-                DrawLine(
-                    hh::WINDOW_WIDTH / 2 - 8,
-                    hh::WINDOW_HEIGHT / 2,
-                    hh::WINDOW_WIDTH / 2 + 8,
-                    hh::WINDOW_HEIGHT / 2,
-                    WHITE
-                );
+                if (!(currentScreen == GameScreen::MapBuilder && builderTopDown))
+                {
+                    DrawLine(
+                        hh::WINDOW_WIDTH / 2 - 8,
+                        hh::WINDOW_HEIGHT / 2,
+                        hh::WINDOW_WIDTH / 2 + 8,
+                        hh::WINDOW_HEIGHT / 2,
+                        WHITE
+                    );
 
-                DrawLine(
-                    hh::WINDOW_WIDTH / 2,
-                    hh::WINDOW_HEIGHT / 2 - 8,
-                    hh::WINDOW_WIDTH / 2,
-                    hh::WINDOW_HEIGHT / 2 + 8,
-                    WHITE
-                );
+                    DrawLine(
+                        hh::WINDOW_WIDTH / 2,
+                        hh::WINDOW_HEIGHT / 2 - 8,
+                        hh::WINDOW_WIDTH / 2,
+                        hh::WINDOW_HEIGHT / 2 + 8,
+                        WHITE
+                    );
+                }
             }
 
             EndDrawing();

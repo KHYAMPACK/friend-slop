@@ -51,12 +51,17 @@ endif()
 add_executable(${PROJECT_NAME}
     src/main.cpp
     src/steam/steam_client.cpp
+    src/maps/house/house.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     src
     "${CMAKE_SOURCE_DIR}/Headers"
     "${STEAMWORKS_SDK}/public"
+)
+file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}/assets/maps/house.txt" HH_HOUSE_FILE_PATH)
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    "HH_HOUSE_FILE=\"${HH_HOUSE_FILE_PATH}\""
 )
 target_link_libraries(${PROJECT_NAME} PRIVATE
     raylib
