@@ -72,7 +72,7 @@ Players should feel like they are **decorating a house for war crimes with a sho
 - Engine: **Raylib 5.5** (fetched by CMake; do not vendor a second copy)
 - Language: **C++17** (Raylib is a C library; we call it from C++. No extra frameworks.)
 - Build: **CMake** is the only supported build. Both people use the same commands.
-- Steam: **Steamworks SDK** is the one allowed extra library. Dev App ID is **480 (Spacewar)** via `steam_appid.txt` next to the exe. Do **not** call `SteamAPI_RestartAppIfNecessary` until we have a real App ID (480 would relaunch Valve’s Spacewar). SDK lives in `third_party/steamworks/` or `STEAMWORKS_SDK` — never commit the SDK tree. Current slice is **init + overlay only** (persona name in the window). No lobbies, P2P, or movement sync yet.
+- Steam: **Steamworks SDK** is the one allowed extra library. Dev App ID is **480 (Spacewar)** via `steam_appid.txt` next to the exe. Do **not** call `SteamAPI_RestartAppIfNecessary` until we have a real App ID (480 would relaunch Valve’s Spacewar). SDK lives in `third_party/steamworks/` or `STEAMWORKS_SDK` — never commit the SDK tree. Current slice is **init + friends lobby names** (C = create, I = invite overlay). No P2P and no movement sync yet. Both games must already be running before invite, or Steam may launch real Spacewar.
 - Workflow: **console / source files only** — no Godot, no visual scene editor, no generated project files checked in
 - Multiplayer: required for the real fantasy; Steam identity is in. Gameplay can still prototype **local-first**. Online netcode is a later slice.
 - Repo: this Raylib project only (not the Godot `heart-house` repo, not Tilky Engine)
@@ -185,7 +185,7 @@ If that slice already makes people yell on voice chat, the idea is validated.
 - Complex wire/logic puzzles in the build phase.
 - Huge content library before the loop is fun.
 - Building this in Godot or Tilky Engine (this repo is Raylib).
-- Steam lobbies / P2P / movement sync (init + overlay only until asked).
+- Steam P2P / movement sync (lobby names only until asked).
 - `SteamAPI_RestartAppIfNecessary` while App ID is 480.
 
 ## Tone / product feel
@@ -204,7 +204,7 @@ Friend-slop party game: fast, nostalgic, absurd, readable, scream-on-Discord ene
 - Don’t expand scope into combat systems unless asked.
 - Match existing naming and file style once files exist.
 - Do not add extra libraries, engines, or build systems unless asked. Allowed: Raylib + CMake + Steamworks (init/overlay only).
-- Do not add Steam lobbies, P2P, or `SteamAPI_RestartAppIfNecessary` unless asked.
+- Do not add Steam P2P, movement sync, or `SteamAPI_RestartAppIfNecessary` unless asked.
 - When adding a source file, update `CMakeLists.txt` in the same change.
 - Ask before changing core loop rules (phases, heart objective, 6-placement budget, spectator buttons).
 

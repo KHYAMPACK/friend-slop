@@ -35,7 +35,18 @@ Windows (MSVC):
 .\build\Debug\heart_house.exe
 ```
 
-First configure downloads Raylib (needs network once). Steam must be **open and logged in** to see your persona name. Shift+Tab opens the overlay. If Steam is closed, the window still opens and says `Open Steam and relaunch`.
+First configure downloads Raylib (needs network once). Steam must be **open and logged in**.
+
+## Test seeing your friend’s name
+
+Both of you: Steam open, same source pulled, both windows **already running**. Then:
+
+1. You press **C** (create lobby). Your name appears under `In lobby`.
+2. You press **I** (Steam invite overlay). Pick your friend.
+3. Friend accepts the invite in Steam (do not let Steam start the real Spacewar game).
+4. Both windows should list **two names**.
+
+If the friend is not already in Heart House, Steam may launch Valve’s Spacewar instead (App ID 480). No movement sync yet — names only.
 
 ## Two-person workflow
 
@@ -45,4 +56,4 @@ First configure downloads Raylib (needs network once). Steam must be **open and 
 4. Push when it compiles and runs.
 5. Playtest, then report what felt wrong.
 
-Do not commit `build/`, binaries, or the Steamworks SDK. CMake is the only supported build. Netcode (lobbies / movement sync) is not in this slice.
+Do not commit `build/`, binaries, or the Steamworks SDK. CMake is the only supported build. Movement sync is not in this slice.

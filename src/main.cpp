@@ -10,30 +10,50 @@ int main()
     constexpr int titleY = 40;
     constexpr int hintY = 88;
     constexpr int steamY = 136;
-    constexpr int overlayY = 172;
+    constexpr int lobbyHintY = 172;
+    constexpr int membersY = 216;
+    constexpr int memberLine = 28;
     constexpr int titleSize = 32;
     constexpr int bodySize = 20;
 
-    steam_init();
+    SteamInit();
 
     InitWindow(hh::WINDOW_WIDTH, hh::WINDOW_HEIGHT, "Heart House");
     SetTargetFPS(hh::TARGET_FPS);
 
     while (!WindowShouldClose()) {
-        steam_tick();
+        SteamTick();
+
+        if (SteamLoggedIn()) {
+            if (IsKeyPressed(KEY_C)) {
+                SteamCreateLobby();
+            }
+            if (IsKeyPressed(KEY_I)) {
+                SteamOpenInvite();
+            }
+        }
 
         BeginDrawing();
         ClearBackground(clearColor);
         DrawText("Heart House", padX, titleY, titleSize, RAYWHITE);
-        DrawText("Build with CMake, then playtest. Close the window to quit.", padX, hintY, bodySize,
-            GRAY);
-        DrawText(steam_status_line(), padX, steamY, bodySize, RAYWHITE);
-        DrawText("Shift+Tab for Steam overlay (Steam must be open).", padX, overlayY, bodySize,
-            GRAY);
+        DrawText("C = create lobby. I = invite friend. Both windows must already be open.", padX,
+            hintY, bodySize, GRAY);
+        DrawText(SteamStatusLine(), padX, steamY, bodySize, RAYWHITE);
+        DrawText(SteamLobbyHint(), padX, lobbyHintY, bodySize, GRAY);
+
+        const int memberCount = SteamLobbyMemberCount();
+        if (SteamInLobby()) {
+            DrawText(TextFormat("In lobby (%d/%d):", memberCount, hh::MAX_PLAYERS), padX, membersY,
+                bodySize, RAYWHITE);
+            for (int i = 0; i < memberCount; ++i) {
+                DrawText(SteamLobbyMemberName(i), padX + 24, membersY + memberLine * (i + 1),
+                    bodySize, RAYWHITE);
+            }
+        }
         EndDrawing();
     }
 
     CloseWindow();
-    steam_shutdown();
+    SteamShutdown();
     return 0;
 }

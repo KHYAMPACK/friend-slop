@@ -1,11 +1,18 @@
 #pragma once
 
-/* SteamAPI init / tick / shutdown. No netcode, no RestartAppIfNecessary.
- * Area: steam
+/* SteamAPI init / tick / shutdown, friends lobby for seeing names.
+ * Area: steam. No movement sync, no RestartAppIfNecessary.
  */
 
-bool steam_init();
-void steam_tick();
-void steam_shutdown();
-[[nodiscard]] bool steam_logged_in();
-[[nodiscard]] const char *steam_status_line();
+bool SteamInit();
+void SteamTick();
+void SteamShutdown();
+[[nodiscard]] bool SteamLoggedIn();
+[[nodiscard]] const char *SteamStatusLine();
+
+void SteamCreateLobby();
+void SteamOpenInvite();
+[[nodiscard]] bool SteamInLobby();
+[[nodiscard]] int SteamLobbyMemberCount();
+[[nodiscard]] const char *SteamLobbyMemberName(int index);
+[[nodiscard]] const char *SteamLobbyHint();
