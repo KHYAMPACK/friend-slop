@@ -31,4 +31,4 @@ End with a short **What you should see** checklist (build/run commands + control
 
 ## Two-person repo
 
-Do not edit the same `.c` / `.h` as the other person in one session if you can avoid it. `main.c`, `game_constants.h`, and `CMakeLists.txt` are shared — keep those diffs tiny. When you add a `.c` file, add it to `CMakeLists.txt` in the same change.
+Do not edit the same `.cpp` / `.h` as the other person in one session if you can avoid it. `main.cpp`, `game_constants.h`, and `CMakeLists.txt` are shared — keep those diffs tiny. When you add a `.cpp` file, add it to `CMakeLists.txt` in the same change.

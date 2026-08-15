@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(heart_house C)
+project(heart_house CXX)
 
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
@@ -16,7 +16,7 @@ set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(raylib)
 
 add_executable(${PROJECT_NAME}
-    src/main.c
+    src/main.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE src)

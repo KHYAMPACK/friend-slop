@@ -1,12 +1,12 @@
 # Heart House (Raylib)
 
-Two-person C + Raylib party game. Design and agent rules: [AGENTS.md](AGENTS.md).
+Two-person C++ + Raylib party game. Design and agent rules: [AGENTS.md](AGENTS.md).
 
 ## Needs
 
 - Git
 - CMake 3.16+
-- A C compiler (Visual Studio Build Tools on Windows, or MinGW)
+- A C++ compiler (Visual Studio Build Tools on Windows, or MinGW)
 
 ## Clone, build, run
 
@@ -29,7 +29,7 @@ First configure downloads Raylib (needs network once).
 
 1. `git pull` (or rebase) before you start.
 2. Work on a feature branch. Open a PR into `main`.
-3. Stay in your ownership folder when you can (see AGENTS.md). Do not both edit the same `.c` / `.h`.
+3. Stay in your ownership folder when you can (see AGENTS.md). Do not both edit the same `.cpp` / `.h`.
 4. Push when it compiles and runs.
 5. Playtest, then report what felt wrong.
 

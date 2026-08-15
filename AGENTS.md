@@ -1,6 +1,6 @@
 # AGENTS.md — Heart House (working title)
 
-Orientation for AI agents working on this game. This is a **Raylib** multiplayer party game, coded from the console (no visual editor). Same fantasy as the Godot prototype; this repo is C + Raylib only.
+Orientation for AI agents working on this game. This is a **Raylib** multiplayer party game, coded from the console (no visual editor). Same fantasy as the Godot prototype; this repo is C++ + Raylib only.
 
 ## One-line pitch
 
@@ -70,7 +70,7 @@ Players should feel like they are **decorating a house for war crimes with a sho
 ## Tech
 
 - Engine: **Raylib 5.5** (fetched by CMake; do not vendor a second copy)
-- Language: **C11** (default unless the team explicitly switches)
+- Language: **C++17** (Raylib is a C library; we call it from C++. No extra frameworks.)
 - Build: **CMake** is the only supported build. Both people use the same commands.
 - Workflow: **console / source files only** — no Godot, no visual scene editor, no generated project files checked in
 - Multiplayer: required for the real fantasy; prototype **local-first** (same machine / hotseat / split or sequential local) before full online
@@ -82,13 +82,13 @@ Folders map to ownership so diffs stay reviewable:
 
 ```
 src/
-  main.c           # entry + window + main loop; phase switching lives here later
+  main.cpp         # entry + window + main loop; phase switching lives here later
   core/            # shared constants + tiny types (no gameplay systems)
   maps/house/      # premade House graybox / map
   player/          # movement + camera
   heart/           # Heart objective
   build/           # hotbar, snap place, budget, timer, save layout
-  traps/           # one .c + .h per trap type
+  traps/           # one .cpp + .h per trap type
   raid/            # run mode, win/fail, scoring hooks
   spectate/        # spectator camera + trigger buttons
   ui/              # menus / HUD
@@ -96,7 +96,7 @@ assets/            # textures, models, sfx (committed; not build output)
 ```
 
 - One folder ≈ one job.
-- Colocate `thing.c` + `thing.h`.
+- Colocate `thing.cpp` + `thing.h`.
 - Prefer editing inside the owning folder over inventing parallel systems.
 - Named constants live in `src/core/game_constants.h` — no magic numbers scattered.
 
@@ -105,12 +105,12 @@ assets/            # textures, models, sfx (committed; not build output)
 Written so a teammate can review AI diffs without guessing:
 
 - Short file header: what it does + which area owns it.
-- One responsibility per `.c` file. If it needs “and also…”, split it.
-- Prefer plain Raylib + small C files over engines, ECS frameworks, or plugin stacks.
+- One responsibility per `.cpp` file. If it needs “and also…”, split it.
+- Prefer plain Raylib + small C++ files (structs + functions) over engines, ECS frameworks, or plugin stacks.
 - Name files for what the player sees (`spike_floor`, `locked_door`), not abstractions.
 - Keep PRs/commits small enough to read in one sitting.
 - Match `.clang-format` (4-space indent). Do not fight the formatter.
-- CMakeLists.txt is the source of truth for which files compile. When you add a `.c`, add it there in the same change.
+- CMakeLists.txt is the source of truth for which files compile. When you add a `.cpp`, add it there in the same change.
 
 ## Collaboration rules (2-person team)
 
@@ -119,7 +119,7 @@ This repo is meant for **two people + Cursor agents** working from the console.
 - Use Git. **Pull (or rebase) before you start.** Push when a chunk actually runs.
 - Prefer **feature branches + PRs into `main`**. Do not both commit straight to `main` for overlapping work.
 - Never commit `build/`, compiler output, `.vs/`, or local CMake caches. `.gitignore` already covers this.
-- **Do not edit the same `.c` / `.h` at the same time.** Split by the ownership table. If you must touch a shared file (`main.c`, `game_constants.h`, `CMakeLists.txt`), ping the other person first and keep the diff tiny.
+- **Do not edit the same `.cpp` / `.h` at the same time.** Split by the ownership table. If you must touch a shared file (`main.cpp`, `game_constants.h`, `CMakeLists.txt`), ping the other person first and keep the diff tiny.
 - Keep commits small and descriptive.
 - Raylib itself is downloaded by CMake (FetchContent). Do not copy raylib sources into the repo.
 - Shared tunables (`MAX_PLACEMENTS`, timers) change only when both people agree — they are match rules, not local prefs.
@@ -140,11 +140,11 @@ This repo is meant for **two people + Cursor agents** working from the console.
 | Build phase | Trap hotbar, snap place, budget, timer, save layout |
 | Raid / spectate | Load layout, spectator camera, trigger buttons, scoring |
 
-`src/main.c`, `src/core/`, and `CMakeLists.txt` are shared. Touch them last, in small diffs, and tell the other person.
+`src/main.cpp`, `src/core/`, and `CMakeLists.txt` are shared. Touch them last, in small diffs, and tell the other person.
 
 ## How to build (both people, same commands)
 
-Needs: Git, CMake 3.16+, a C compiler (Visual Studio Build Tools on Windows, or MinGW).
+Needs: Git, CMake 3.16+, a C++ compiler (Visual Studio Build Tools on Windows, or MinGW).
 
 ```
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
@@ -208,7 +208,7 @@ Ask instead of inventing for things like:
 - Art style, palette, camera feel, UI look, audio mood
 - New mechanics, trap behavior, scoring, control schemes
 - Folder/architecture forks that aren’t already in this file
-- Language/engine switches (C++ / other libs)
+- Language/engine switches or extra libraries
 - Anything ambiguous that would be hard to undo
 
 Allowed without asking:
