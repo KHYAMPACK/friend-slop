@@ -1,0 +1,2 @@
+# Normalize EOL so Windows + whoever else does not fight line endings.
+* text=auto eol=lf
