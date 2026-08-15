@@ -9,7 +9,9 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <iostream>
 #include <memory>
+#include <ostream>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -66,6 +68,7 @@ public:
     {
         ISteamMatchmaking *matchmaking = SteamMatchmaking();
         if (matchmaking == nullptr) {
+            std::cout << "matchmaking is null \n";
             return;
         }
         if (inLobby && lobbyId.IsValid()) {
@@ -74,10 +77,13 @@ public:
             memberCount = 0;
             lobbyId.Clear();
         }
-        const SteamAPICall_t call =
-            matchmaking->CreateLobby(k_ELobbyTypeFriendsOnly, hh::MAX_PLAYERS);
+        std::cout << "pre create lobby\n";
+        const SteamAPICall_t call = matchmaking->CreateLobby(k_ELobbyTypeFriendsOnly, hh::MAX_PLAYERS);
+        std::cout << "post creat lobby\n";
         lobbyCreated.Set(call, this, &SteamSession::OnLobbyCreated);
+        std::cout << "lobby created.set \n";
         SetHint(hintHost);
+        std::cout << "post set hing \n";
     }
 
     void JoinFriendLobby()
@@ -99,7 +105,9 @@ public:
             friendCount = 0;
         }
         for (int i = 0; i < friendCount; ++i) {
+            std::cout << "pre\n";
             const CSteamID friendId = friends->GetFriendByIndex(i, k_EFriendFlagImmediate);
+            std::cout << "post\n";
             if (!friendId.IsValid()) {
                 continue;
             }
@@ -385,7 +393,9 @@ void SteamCreateLobby()
     if (g_session == nullptr) {
         return;
     }
+    std::cout << "pre create firends looby \n";
     g_session->CreateFriendsLobby();
+    std::cout << "session created";
 }
 
 void SteamJoinFriendLobby()
