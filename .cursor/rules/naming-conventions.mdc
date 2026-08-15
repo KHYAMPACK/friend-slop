@@ -1,0 +1,41 @@
+---
+description: Folder, variable, and function naming (PascalCase folders/functions, camelCase variables)
+alwaysApply: true
+---
+
+# Naming conventions
+
+Use these names in new folders and C++ we add. Do not silently rename existing lowercase folders (`src/core`, `src/maps`, …) unless the team asks.
+
+## Folders — first letter uppercase (PascalCase)
+
+Each path segment starts with an uppercase letter. Further words are uppercase too.
+
+- ✅ `Player/`, `SpikeFloor/`, `Maps/House/`
+- ❌ `player/`, `spike_floor/`, `maps/house/`
+
+Leave these as-is: CMake output `build/`, tool dirs (`.cursor`, `.git`), and the existing `src/` tree until it is renamed on purpose.
+
+## Variables — camelCase
+
+Start lowercase. Every later word starts uppercase.
+
+- ✅ `playerMovement`, `heartPosition`, `trapCount`
+- ❌ `PlayerMovement`, `player_movement`, `HeartPosition`
+
+Match `inline constexpr` constants in `game_constants.hpp`: `hh::MAX_PLAYERS`, `hh::BUILD_TIME_SEC` (ALL_CAPS). Do not camelCase those. Do not `#define` them.
+
+## Functions — PascalCase
+
+Start uppercase. Every later word starts uppercase.
+
+- ✅ `UpdatePlayer()`, `PlaceTrap()`, `CheckHeartTouch()`
+- ❌ `updatePlayer()`, `place_trap()`, `check_heart_touch()`
+
+Raylib APIs we call (`InitWindow`, `BeginDrawing`) already match this. Do not wrap them in snake_case helpers just to rename them.
+
+## Files
+
+- Headers we own use `.hpp` (`spike_floor.hpp`, `locked_door.hpp`, `game_constants.hpp`).
+- Implementation files stay `.cpp`.
+- Do not add new `.h` files for our code. Leave third-party headers as they ship (`raylib.h`).

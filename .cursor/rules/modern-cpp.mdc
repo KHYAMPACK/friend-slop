@@ -1,0 +1,38 @@
+---
+description: Modern C++17 style — constexpr, no macros for values
+globs: "**/*.{cpp,hpp}"
+alwaysApply: true
+---
+
+# Modern C++
+
+Write C++17, not C with a `.cpp` extension. Keep files small (structs + functions). Do not add frameworks.
+
+## Constants
+
+- `inline constexpr` (in a header) or `constexpr` (in a .cpp). No `#define` for numbers or strings.
+- Shared tunables live in `namespace hh` in `game_constants.hpp` as ALL_CAPS `inline constexpr` (see naming-conventions).
+- Magic numbers in a `.cpp` become named `constexpr` values (camelCase locals, ALL_CAPS if they belong in `game_constants.hpp`).
+
+```cpp
+// BAD
+#define WINDOW_WIDTH 1280
+InitWindow(WINDOW_WIDTH, 720, "Heart House");
+
+// GOOD
+namespace hh {
+inline constexpr int WINDOW_WIDTH = 1280;
+inline constexpr int WINDOW_HEIGHT = 720;
+}
+InitWindow(hh::WINDOW_WIDTH, hh::WINDOW_HEIGHT, "Heart House");
+```
+
+## Language
+
+- `nullptr`, not `NULL` or `0` for pointers.
+- `[[nodiscard]]` on functions whose return value must not be ignored (init, queries).
+- Range-for when looping a known container. `auto` when the type is obvious and noisy.
+- `std::array` / `std::string_view` over C arrays and raw `const char*` when it does not fight Raylib/Steam (they still want `const char*` at the call).
+- `#pragma once` in headers.
+
+Do not invent classes, smart-pointer graphs, or exceptions for this game unless asked.

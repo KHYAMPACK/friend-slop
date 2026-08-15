@@ -30,6 +30,9 @@ compile_commands.json
 Thumbs.db
 *.tmp
 
+# Steamworks SDK (download locally; do not commit)
+/third_party/steamworks/
+
 # Keep Cursor project rules; ignore local editor junk
 *.swp
 *~
