@@ -5,7 +5,6 @@
 
 #include <steam/steam_api.h>
 
-#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -304,30 +303,10 @@ void PeerNetwork::OnConnectionStatusChanged(
     }
 }
 
-bool ParseSteamID64(
-    const std::string& text,
-    std::uint64_t& output)
-{
-    if (text.empty())
-        return false;
-
-    const char* begin = text.data();
-    const char* end = begin + text.size();
-
-    const auto result =
-        std::from_chars(begin, end, output);
-
-    if (result.ec != std::errc{} || result.ptr != end)
-        return false;
-
-    return CSteamID(output).IsValid();
-}
-
 enum class GameScreen
 {
     Menu,
     Hosting,
-    EnterHostID,
     Connecting,
     Playing
 };
@@ -390,10 +369,6 @@ int main()
                     SteamFriends()->GetPersonaName() != nullptr
                 ? SteamFriends()->GetPersonaName()
                 : "(unknown)";
-        const std::string ownSteamID =
-            std::to_string(
-                SteamUser()->GetSteamID().ConvertToUint64()
-            );
 
         Texture2D playerTexture =
             LoadTexture(PLAYER_TEXTURE_PATH);
@@ -435,8 +410,7 @@ int main()
 
         GameScreen currentScreen = GameScreen::Menu;
 
-        std::string hostIDInput;
-        std::string inputError;
+        bool p2pJoinStarted = false;
 
         float remoteX = 0.0f;
         float remoteZ = 0.0f;
@@ -456,6 +430,25 @@ int main()
         {
             // Steam callbacks must be processed regularly.
             SteamTick();
+
+            if (!p2pJoinStarted &&
+                !network.Hosting() &&
+                !network.Connected() &&
+                SteamInLobby() &&
+                !SteamIsLobbyOwner())
+            {
+                const std::uint64_t ownerSteamID = SteamLobbyOwnerID64();
+                if (ownerSteamID != 0 && network.ConnectToHost(ownerSteamID))
+                {
+                    camera.position = {
+                        3.0f,
+                        PLAYER_EYE_HEIGHT,
+                        0.0f
+                    };
+                    p2pJoinStarted = true;
+                    currentScreen = GameScreen::Connecting;
+                }
+            }
 
             if ((currentScreen == GameScreen::Hosting || currentScreen == GameScreen::Connecting) && network.Connected())
             {
@@ -479,11 +472,13 @@ int main()
                 currentScreen = network.Hosting()
                     ? GameScreen::Hosting
                     : GameScreen::Menu;
+                if (!network.Hosting())
+                    p2pJoinStarted = false;
             }
 
             if (currentScreen == GameScreen::Menu)
             {
-                if (IsKeyPressed(KEY_SPACE))
+                if (IsKeyPressed(KEY_C))
                 {
                     camera.position = {
                         -3.0f,
@@ -491,51 +486,23 @@ int main()
                         0.0f
                     };
 
-                    if (network.StartHost()) currentScreen = GameScreen::Hosting;
-                }
-
-                if (IsKeyPressed(KEY_W))
-                {
-                    hostIDInput.clear();
-                    inputError.clear();
-                    currentScreen = GameScreen::EnterHostID;
-                }
-            }
-            else if (currentScreen == GameScreen::EnterHostID)
-            {
-                int character = 0;
-
-                while ((character = GetCharPressed()) > 0)
-                {
-                    if (character >= '0' &&
-                        character <= '9' &&
-                        hostIDInput.size() < 20)
+                    if (network.StartHost())
                     {
-                        hostIDInput.push_back(
-                            static_cast<char>(character)
-                        );
+                        SteamCreateLobby();
+                        currentScreen = GameScreen::Hosting;
                     }
                 }
 
-                if (IsKeyPressed(KEY_BACKSPACE) &&
-                    !hostIDInput.empty())
+                if (IsKeyPressed(KEY_J))
                 {
-                    hostIDInput.pop_back();
-                }
-
-                if (IsKeyPressed(KEY_ENTER))
-                {
-                    std::uint64_t hostSteamID = 0;
-
-                    if (!ParseSteamID64(hostIDInput, hostSteamID))
-                        inputError = "Invalid SteamID64";
-                    else if (hostSteamID == SteamUser()->GetSteamID().ConvertToUint64())inputError = "You cannot connect to yourself";
-                    else if (network.ConnectToHost(hostSteamID))
+                    if (SteamJoinFriendLobby())
                     {
-                        camera.position = {3.0f, PLAYER_EYE_HEIGHT,
+                        camera.position = {
+                            3.0f,
+                            PLAYER_EYE_HEIGHT,
                             0.0f
                         };
-
+                        p2pJoinStarted = false;
                         currentScreen = GameScreen::Connecting;
                     }
                 }
@@ -622,7 +589,7 @@ int main()
             if (currentScreen == GameScreen::Menu)
             {
                 DrawText(
-                    "SPACE - Host game",
+                    "C - Host game",
                     60,
                     60,
                     30,
@@ -630,7 +597,7 @@ int main()
                 );
 
                 DrawText(
-                    "W - Join game",
+                    "J - Join friend's lobby",
                     60,
                     110,
                     30,
@@ -638,9 +605,17 @@ int main()
                 );
 
                 DrawText(
+                    SteamLobbyHint(),
+                    60,
+                    160,
+                    20,
+                    GRAY
+                );
+
+                DrawText(
                     network.Status().c_str(),
                     60,
-                    180,
+                    200,
                     20,
                     GRAY
                 );
@@ -648,7 +623,7 @@ int main()
             else if (currentScreen == GameScreen::Hosting)
             {
                 DrawText(
-                    "Waiting for client",
+                    "Waiting for friend (they press J)",
                     60,
                     60,
                     30,
@@ -664,81 +639,56 @@ int main()
                 );
 
                 DrawText(
-                    "Send this SteamID64 (starts with 7656119):",
+                    SteamLobbyHint(),
                     60,
-                    145,
+                    150,
                     20,
                     GRAY
                 );
 
+                const int memberCount = SteamLobbyMemberCount();
                 DrawText(
-                    ownSteamID.c_str(),
+                    TextFormat("In lobby (%d):", memberCount),
                     60,
-                    180,
-                    36,
-                    YELLOW
+                    190,
+                    20,
+                    WHITE
                 );
+
+                for (int i = 0; i < memberCount; ++i)
+                {
+                    DrawText(
+                        SteamLobbyMemberName(i),
+                        84,
+                        220 + i * 28,
+                        20,
+                        RAYWHITE
+                    );
+                }
 
                 DrawText(
                     network.Status().c_str(),
                     60,
-                    250,
+                    220 + memberCount * 28 + 20,
                     20,
                     WHITE
                 );
-            }
-            else if (currentScreen == GameScreen::EnterHostID)
-            {
-                DrawText(
-                    "Enter host SteamID64:",
-                    60,
-                    60,
-                    30,
-                    WHITE
-                );
-
-                DrawRectangleLines(
-                    60,
-                    120,
-                    500,
-                    50,
-                    WHITE
-                );
-
-                DrawText(
-                    hostIDInput.c_str(),
-                    75,
-                    132,
-                    26,
-                    YELLOW
-                );
-
-                DrawText(
-                    "Press ENTER to connect",
-                    60,
-                    195,
-                    20,
-                    GRAY
-                );
-
-                if (!inputError.empty())
-                {
-                    DrawText(
-                        inputError.c_str(),
-                        60,
-                        235,
-                        20,
-                        RED
-                    );
-                }
             }
             else if (currentScreen == GameScreen::Connecting)
             {
                 DrawText(
+                    SteamLobbyHint(),
+                    60,
+                    60,
+                    24,
+                    WHITE
+                );
+
+                DrawText(
                     network.Status().c_str(),
                     60,
-                    60,
-                    30,
+                    110,
+                    24,
                     WHITE
                 );
             }

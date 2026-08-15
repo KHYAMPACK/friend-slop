@@ -86,12 +86,12 @@ public:
         std::cout << "post set hing \n";
     }
 
-    void JoinFriendLobby()
+    bool JoinFriendLobby()
     {
         ISteamFriends *friends = SteamFriends();
         if (friends == nullptr) {
             SetHint(hintNoLobby);
-            return;
+            return false;
         }
 
         uint32 appId = 480;
@@ -123,9 +123,10 @@ public:
             }
             QueueJoin(gameInfo.m_steamIDLobby);
             SetHint("Joining friend's lobby...");
-            return;
+            return true;
         }
         SetHint(hintNoLobby);
+        return false;
     }
 
     void FlushPending()
@@ -178,6 +179,30 @@ public:
     [[nodiscard]] const char *Hint() const
     {
         return hint.data();
+    }
+
+    [[nodiscard]] std::uint64_t OwnerSteamID64() const
+    {
+        ISteamMatchmaking *matchmaking = SteamMatchmaking();
+        if (!inLobby || !lobbyId.IsValid() || matchmaking == nullptr) {
+            return 0;
+        }
+
+        const CSteamID owner = matchmaking->GetLobbyOwner(lobbyId);
+        if (!owner.IsValid() || !owner.BIndividualAccount()) {
+            return 0;
+        }
+        return owner.ConvertToUint64();
+    }
+
+    [[nodiscard]] bool IsOwner() const
+    {
+        ISteamUser *user = SteamUser();
+        if (user == nullptr) {
+            return false;
+        }
+        const std::uint64_t owner = OwnerSteamID64();
+        return owner != 0 && owner == user->GetSteamID().ConvertToUint64();
     }
 
     void Leave()
@@ -253,6 +278,9 @@ private:
         }
         lobbyId = CSteamID(result->m_ulSteamIDLobby);
         inLobby = lobbyId.IsValid();
+        if (inLobby && SteamMatchmaking() != nullptr) {
+            SteamMatchmaking()->SetLobbyJoinable(lobbyId, true);
+        }
         pendingRefresh = true;
         SetHint(hintHost);
     }
@@ -408,17 +436,30 @@ void SteamCreateLobby()
     std::cout << "session created";
 }
 
-void SteamJoinFriendLobby()
+bool SteamJoinFriendLobby()
 {
     if (g_session == nullptr) {
-        return;
+        return false;
     }
-    g_session->JoinFriendLobby();
+    return g_session->JoinFriendLobby();
 }
 
 bool SteamInLobby()
 {
     return g_session != nullptr && g_session->InLobby();
+}
+
+bool SteamIsLobbyOwner()
+{
+    return g_session != nullptr && g_session->IsOwner();
+}
+
+std::uint64_t SteamLobbyOwnerID64()
+{
+    if (g_session == nullptr) {
+        return 0;
+    }
+    return g_session->OwnerSteamID64();
 }
 
 int SteamLobbyMemberCount()

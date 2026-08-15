@@ -1,8 +1,10 @@
 #pragma once
 
 /* SteamAPI init / tick / shutdown, friends lobby for seeing names.
- * Area: steam. No movement sync, no RestartAppIfNecessary, no overlay.
+ * Area: steam. No overlay invite dialog (overlay + OpenGL 0xC0000005).
  */
+
+#include <cstdint>
 
 void SteamPrepareLaunch();
 bool SteamInit();
@@ -13,8 +15,10 @@ void SteamShutdown();
 [[nodiscard]] const char *SteamStatusLine();
 
 void SteamCreateLobby();
-void SteamJoinFriendLobby();
+[[nodiscard]] bool SteamJoinFriendLobby();
 [[nodiscard]] bool SteamInLobby();
+[[nodiscard]] bool SteamIsLobbyOwner();
+[[nodiscard]] std::uint64_t SteamLobbyOwnerID64();
 [[nodiscard]] int SteamLobbyMemberCount();
 [[nodiscard]] const char *SteamLobbyMemberName(int index);
 [[nodiscard]] const char *SteamLobbyHint();
