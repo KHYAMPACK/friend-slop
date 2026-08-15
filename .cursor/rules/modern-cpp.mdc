@@ -12,7 +12,7 @@ Write C++17, not C with a `.cpp` extension. Keep files small (structs + function
 
 - `inline constexpr` (in a header) or `constexpr` (in a .cpp). No `#define` for numbers or strings.
 - Shared tunables live in `namespace hh` in `game_constants.hpp` as ALL_CAPS `inline constexpr` (see naming-conventions).
-- Magic numbers in a `.cpp` become named `constexpr` values (camelCase locals, ALL_CAPS if they belong in `game_constants.hpp`).
+- Magic numbers become named `constexpr` (or `const` if the type cannot be constexpr). Names are ALL_CAPS whether they live in an anonymous namespace or in `game_constants.hpp` (see naming-conventions).
 
 ```cpp
 // BAD

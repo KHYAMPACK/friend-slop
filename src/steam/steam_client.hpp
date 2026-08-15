@@ -2,23 +2,28 @@
 
 /* SteamAPI init / tick / shutdown, friends lobby for seeing names.
  * Area: steam. No overlay invite dialog (overlay + OpenGL 0xC0000005).
+ * Namespace is HhSteam (Steamworks already owns SteamClient).
  */
 
 #include <cstdint>
 
-void SteamPrepareLaunch();
-bool SteamInit();
-void SteamUseExeDirectory();
-void SteamTick();
-void SteamShutdown();
-[[nodiscard]] bool SteamLoggedIn();
-[[nodiscard]] const char *SteamStatusLine();
+namespace HhSteam {
 
-void SteamCreateLobby();
-[[nodiscard]] bool SteamJoinFriendLobby();
-[[nodiscard]] bool SteamInLobby();
-[[nodiscard]] bool SteamIsLobbyOwner();
-[[nodiscard]] std::uint64_t SteamLobbyOwnerID64();
-[[nodiscard]] int SteamLobbyMemberCount();
-[[nodiscard]] const char *SteamLobbyMemberName(int index);
-[[nodiscard]] const char *SteamLobbyHint();
+void PrepareLaunch();
+bool Init();
+void UseExeDirectory();
+void Tick();
+void Shutdown();
+[[nodiscard]] bool LoggedIn();
+[[nodiscard]] const char* StatusLine();
+
+void CreateLobby();
+[[nodiscard]] bool JoinFriendLobby();
+[[nodiscard]] bool InLobby();
+[[nodiscard]] bool IsLobbyOwner();
+[[nodiscard]] std::uint64_t LobbyOwnerID64();
+[[nodiscard]] int LobbyMemberCount();
+[[nodiscard]] const char* LobbyMemberName(const int index);
+[[nodiscard]] const char* LobbyHint();
+
+} // namespace HhSteam

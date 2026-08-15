@@ -30,19 +30,20 @@
 
 namespace {
 
-constexpr std::size_t statusMax = 256;
-constexpr std::size_t nameMax = 128;
-constexpr char offlineStatus[] = "Open Steam and relaunch";
-constexpr char unknownName[] = "(unknown)";
-constexpr char hintCreate[] = "You: C to host. Friend: J to join. You must be Steam friends.";
-constexpr char hintHost[] = "Lobby up. Friend presses J.";
-constexpr char hintOffline[] = "Open Steam and relaunch before creating a lobby.";
-constexpr char hintNoLobby[] = "No friend lobby yet. They press C first. You must be Steam friends.";
+constexpr std::size_t STATUS_MAX = 256;
+constexpr std::size_t MEMBER_NAME_MAX = 128;
+constexpr char OFFLINE_STATUS[] = "Open Steam and relaunch";
+constexpr char UNKNOWN_NAME[] = "(unknown)";
+constexpr char HINT_CREATE[] = "You: C to host. Friend: J to join. You must be Steam friends.";
+constexpr char HINT_HOST[] = "Lobby up. Friend presses J.";
+constexpr char HINT_OFFLINE[] = "Open Steam and relaunch before creating a lobby.";
+constexpr char HINT_NO_LOBBY[] = "No friend lobby yet. They press C first. You must be Steam friends.";
+constexpr std::uint32_t SPACEWAR_APP_ID = 480;
 
-bool g_ok = false;
-std::array<char, statusMax> g_status{};
+bool steamOk = false;
+std::array<char, STATUS_MAX> statusText{};
 
-void CopyAscii(char *dst, std::size_t dstSize, const char *src)
+void CopyAscii(char* dst, const std::size_t dstSize, const char* src)
 {
     if (dst == nullptr || dstSize == 0) {
         return;
@@ -57,16 +58,16 @@ void CopyAscii(char *dst, std::size_t dstSize, const char *src)
     dst[out] = '\0';
 }
 
-void SetStatus(const char *text)
+void SetStatus(const char* text)
 {
-    CopyAscii(g_status.data(), g_status.size(), text);
+    CopyAscii(statusText.data(), statusText.size(), text);
 }
 
 class SteamSession {
 public:
     void CreateFriendsLobby()
     {
-        ISteamMatchmaking *matchmaking = SteamMatchmaking();
+        ISteamMatchmaking* matchmaking = SteamMatchmaking();
         if (matchmaking == nullptr) {
             std::cout << "matchmaking is null \n";
             return;
@@ -82,20 +83,20 @@ public:
         std::cout << "post creat lobby\n";
         lobbyCreated.Set(call, this, &SteamSession::OnLobbyCreated);
         std::cout << "lobby created.set \n";
-        SetHint(hintHost);
+        SetHint(HINT_HOST);
         std::cout << "post set hing \n";
     }
 
     bool JoinFriendLobby()
     {
-        ISteamFriends *friends = SteamFriends();
+        ISteamFriends* friends = SteamFriends();
         if (friends == nullptr) {
-            SetHint(hintNoLobby);
+            SetHint(HINT_NO_LOBBY);
             return false;
         }
 
-        uint32 appId = 480;
-        ISteamUtils *utils = SteamUtils();
+        std::uint32_t appId = SPACEWAR_APP_ID;
+        ISteamUtils* utils = SteamUtils();
         if (utils != nullptr) {
             appId = utils->GetAppID();
         }
@@ -125,13 +126,13 @@ public:
             SetHint("Joining friend's lobby...");
             return true;
         }
-        SetHint(hintNoLobby);
+        SetHint(HINT_NO_LOBBY);
         return false;
     }
 
     void FlushPending()
     {
-        ISteamMatchmaking *matchmaking = SteamMatchmaking();
+        ISteamMatchmaking* matchmaking = SteamMatchmaking();
         if (pendingLeave) {
             pendingLeave = false;
             if (matchmaking != nullptr && inLobby && lobbyId.IsValid()) {
@@ -168,22 +169,22 @@ public:
         return memberCount;
     }
 
-    [[nodiscard]] const char *MemberName(int index) const
+    [[nodiscard]] const char* MemberName(const int index) const
     {
         if (index < 0 || index >= memberCount) {
-            return unknownName;
+            return UNKNOWN_NAME;
         }
         return memberNames[static_cast<std::size_t>(index)].data();
     }
 
-    [[nodiscard]] const char *Hint() const
+    [[nodiscard]] const char* Hint() const
     {
         return hint.data();
     }
 
     [[nodiscard]] std::uint64_t OwnerSteamID64() const
     {
-        ISteamMatchmaking *matchmaking = SteamMatchmaking();
+        ISteamMatchmaking* matchmaking = SteamMatchmaking();
         if (!inLobby || !lobbyId.IsValid() || matchmaking == nullptr) {
             return 0;
         }
@@ -197,7 +198,7 @@ public:
 
     [[nodiscard]] bool IsOwner() const
     {
-        ISteamUser *user = SteamUser();
+        ISteamUser* user = SteamUser();
         if (user == nullptr) {
             return false;
         }
@@ -207,7 +208,7 @@ public:
 
     void Leave()
     {
-        ISteamMatchmaking *matchmaking = SteamMatchmaking();
+        ISteamMatchmaking* matchmaking = SteamMatchmaking();
         if (matchmaking != nullptr && inLobby && lobbyId.IsValid()) {
             matchmaking->LeaveLobby(lobbyId);
         }
@@ -220,12 +221,12 @@ public:
     }
 
 private:
-    void SetHint(const char *text)
+    void SetHint(const char* text)
     {
         CopyAscii(hint.data(), hint.size(), text);
     }
 
-    void QueueJoin(CSteamID id)
+    void QueueJoin(const CSteamID& id)
     {
         if (!id.IsValid()) {
             return;
@@ -239,8 +240,8 @@ private:
 
     void RefreshMembers()
     {
-        ISteamMatchmaking *matchmaking = SteamMatchmaking();
-        ISteamFriends *friends = SteamFriends();
+        ISteamMatchmaking* matchmaking = SteamMatchmaking();
+        ISteamFriends* friends = SteamFriends();
         if (matchmaking == nullptr || friends == nullptr || !inLobby || !lobbyId.IsValid()) {
             memberCount = 0;
             return;
@@ -254,23 +255,23 @@ private:
             count = hh::MAX_PLAYERS;
         }
 
-        std::array<std::array<char, nameMax>, hh::MAX_PLAYERS> nextNames{};
+        std::array<std::array<char, MEMBER_NAME_MAX>, hh::MAX_PLAYERS> nextNames{};
         for (int i = 0; i < count; ++i) {
             const CSteamID id = matchmaking->GetLobbyMemberByIndex(lobbyId, i);
-            const char *name = unknownName;
+            const char* name = UNKNOWN_NAME;
             if (id.IsValid()) {
-                const char *persona = friends->GetFriendPersonaName(id);
+                const char* persona = friends->GetFriendPersonaName(id);
                 if (persona != nullptr && persona[0] != '\0') {
                     name = persona;
                 }
             }
-            CopyAscii(nextNames[static_cast<std::size_t>(i)].data(), nameMax, name);
+            CopyAscii(nextNames[static_cast<std::size_t>(i)].data(), MEMBER_NAME_MAX, name);
         }
         memberNames = nextNames;
         memberCount = count;
     }
 
-    void OnLobbyCreated(LobbyCreated_t *result, bool ioFailure)
+    void OnLobbyCreated(LobbyCreated_t* result, bool ioFailure)
     {
         if (ioFailure || result == nullptr || result->m_eResult != k_EResultOK) {
             SetHint("Lobby create failed. Is Steam running?");
@@ -282,7 +283,7 @@ private:
             SteamMatchmaking()->SetLobbyJoinable(lobbyId, true);
         }
         pendingRefresh = true;
-        SetHint(hintHost);
+        SetHint(HINT_HOST);
     }
 
     STEAM_CALLBACK(SteamSession, OnLobbyEnter, LobbyEnter_t);
@@ -297,11 +298,11 @@ private:
     bool pendingLeave = false;
     bool pendingRefresh = false;
     int memberCount = 0;
-    std::array<std::array<char, nameMax>, hh::MAX_PLAYERS> memberNames{};
-    std::array<char, statusMax> hint{};
+    std::array<std::array<char, MEMBER_NAME_MAX>, hh::MAX_PLAYERS> memberNames{};
+    std::array<char, STATUS_MAX> hint{};
 };
 
-void SteamSession::OnLobbyEnter(LobbyEnter_t *callback)
+void SteamSession::OnLobbyEnter(LobbyEnter_t* callback)
 {
     if (callback == nullptr || callback->m_EChatRoomEnterResponse != k_EChatRoomEnterResponseSuccess) {
         SetHint("Could not enter lobby.");
@@ -310,10 +311,10 @@ void SteamSession::OnLobbyEnter(LobbyEnter_t *callback)
     lobbyId = CSteamID(callback->m_ulSteamIDLobby);
     inLobby = lobbyId.IsValid();
     pendingRefresh = true;
-    SetHint(hintHost);
+    SetHint(HINT_HOST);
 }
 
-void SteamSession::OnLobbyChatUpdate(LobbyChatUpdate_t *callback)
+void SteamSession::OnLobbyChatUpdate(LobbyChatUpdate_t* callback)
 {
     if (callback == nullptr) {
         return;
@@ -321,7 +322,7 @@ void SteamSession::OnLobbyChatUpdate(LobbyChatUpdate_t *callback)
     pendingRefresh = true;
 }
 
-void SteamSession::OnJoinRequested(GameLobbyJoinRequested_t *callback)
+void SteamSession::OnJoinRequested(GameLobbyJoinRequested_t* callback)
 {
     if (callback == nullptr) {
         return;
@@ -329,18 +330,20 @@ void SteamSession::OnJoinRequested(GameLobbyJoinRequested_t *callback)
     QueueJoin(callback->m_steamIDLobby);
 }
 
-std::unique_ptr<SteamSession> g_session;
+std::unique_ptr<SteamSession> session;
 
 } // namespace
 
-void SteamUseExeDirectory()
+namespace HhSteam {
+
+void UseExeDirectory()
 {
 #ifdef _WIN32
     char path[MAX_PATH];
     if (GetModuleFileNameA(nullptr, path, MAX_PATH) == 0) {
         return;
     }
-    char *slash = std::strrchr(path, '\\');
+    char* slash = std::strrchr(path, '\\');
     if (slash != nullptr) {
         *slash = '\0';
         SetCurrentDirectoryA(path);
@@ -348,147 +351,149 @@ void SteamUseExeDirectory()
 #endif
 }
 
-void SteamPrepareLaunch()
+void PrepareLaunch()
 {
 #ifdef _WIN32
     SetEnvironmentVariableA("DISABLESTEAMOVERLAY", "1");
 #endif
-    SteamUseExeDirectory();
+    UseExeDirectory();
 }
 
-bool SteamInit()
+bool Init()
 {
 #ifdef _WIN32
     SetEnvironmentVariableA("DISABLESTEAMOVERLAY", "1");
 #endif
 
-    g_ok = SteamAPI_Init();
-    if (!g_ok) {
-        SetStatus(offlineStatus);
+    steamOk = SteamAPI_Init();
+    if (!steamOk) {
+        SetStatus(OFFLINE_STATUS);
         return false;
     }
 
-    ISteamUser *user = SteamUser();
-    ISteamFriends *friends = SteamFriends();
+    ISteamUser* user = SteamUser();
+    ISteamFriends* friends = SteamFriends();
     if (user == nullptr || friends == nullptr ||
         !user->GetSteamID().BIndividualAccount()) {
-        SetStatus(offlineStatus);
+        SetStatus(OFFLINE_STATUS);
         SteamAPI_Shutdown();
-        g_ok = false;
+        steamOk = false;
         return false;
     }
 
-    const char *name = friends->GetPersonaName();
+    const char* name = friends->GetPersonaName();
     if (name == nullptr || name[0] == '\0') {
-        name = unknownName;
+        name = UNKNOWN_NAME;
     }
-    char line[statusMax];
+    char line[STATUS_MAX];
     std::snprintf(line, sizeof(line), "Steam: %s", name);
     SetStatus(line);
-    g_session = std::make_unique<SteamSession>();
+    session = std::make_unique<SteamSession>();
     return true;
 }
 
-void SteamTick()
+void Tick()
 {
-    if (!g_ok) {
+    if (!steamOk) {
         return;
     }
     SteamAPI_RunCallbacks();
-    if (g_session != nullptr) {
-        g_session->FlushPending();
+    if (session != nullptr) {
+        session->FlushPending();
     }
 }
 
-void SteamShutdown()
+void Shutdown()
 {
-    if (g_session != nullptr) {
-        g_session->Leave();
-        g_session.reset();
+    if (session != nullptr) {
+        session->Leave();
+        session.reset();
     }
-    if (!g_ok) {
+    if (!steamOk) {
         return;
     }
     SteamAPI_Shutdown();
-    g_ok = false;
+    steamOk = false;
 }
 
-bool SteamLoggedIn()
+bool LoggedIn()
 {
-    return g_ok;
+    return steamOk;
 }
 
-const char *SteamStatusLine()
+const char* StatusLine()
 {
-    if (g_status[0] == '\0') {
-        return offlineStatus;
+    if (statusText[0] == '\0') {
+        return OFFLINE_STATUS;
     }
-    return g_status.data();
+    return statusText.data();
 }
 
-void SteamCreateLobby()
+void CreateLobby()
 {
-    if (g_session == nullptr) {
+    if (session == nullptr) {
         return;
     }
     std::cout << "pre create firends looby \n";
-    g_session->CreateFriendsLobby();
+    session->CreateFriendsLobby();
     std::cout << "session created";
 }
 
-bool SteamJoinFriendLobby()
+bool JoinFriendLobby()
 {
-    if (g_session == nullptr) {
+    if (session == nullptr) {
         return false;
     }
-    return g_session->JoinFriendLobby();
+    return session->JoinFriendLobby();
 }
 
-bool SteamInLobby()
+bool InLobby()
 {
-    return g_session != nullptr && g_session->InLobby();
+    return session != nullptr && session->InLobby();
 }
 
-bool SteamIsLobbyOwner()
+bool IsLobbyOwner()
 {
-    return g_session != nullptr && g_session->IsOwner();
+    return session != nullptr && session->IsOwner();
 }
 
-std::uint64_t SteamLobbyOwnerID64()
+std::uint64_t LobbyOwnerID64()
 {
-    if (g_session == nullptr) {
+    if (session == nullptr) {
         return 0;
     }
-    return g_session->OwnerSteamID64();
+    return session->OwnerSteamID64();
 }
 
-int SteamLobbyMemberCount()
+int LobbyMemberCount()
 {
-    if (g_session == nullptr) {
+    if (session == nullptr) {
         return 0;
     }
-    return g_session->MemberCount();
+    return session->MemberCount();
 }
 
-const char *SteamLobbyMemberName(int index)
+const char* LobbyMemberName(const int index)
 {
-    if (g_session == nullptr) {
-        return unknownName;
+    if (session == nullptr) {
+        return UNKNOWN_NAME;
     }
-    return g_session->MemberName(index);
+    return session->MemberName(index);
 }
 
-const char *SteamLobbyHint()
+const char* LobbyHint()
 {
-    if (!g_ok) {
-        return hintOffline;
+    if (!steamOk) {
+        return HINT_OFFLINE;
     }
-    if (g_session == nullptr) {
-        return hintCreate;
+    if (session == nullptr) {
+        return HINT_CREATE;
     }
-    const char *hint = g_session->Hint();
+    const char* hint = session->Hint();
     if (hint[0] == '\0') {
-        return hintCreate;
+        return HINT_CREATE;
     }
     return hint;
 }
+
+} // namespace HhSteam

@@ -2,6 +2,7 @@
 #include <raymath.h>
 
 #include "steam/steam_client.hpp"
+#include "core/game_constants.hpp"
 
 #include <steam/steam_api.h>
 
@@ -10,11 +11,18 @@
 #include <cstring>
 #include <string>
 
+namespace {
+
 constexpr const char* PLAYER_TEXTURE_PATH =
     R"(player.png)";
 
 constexpr std::uint32_t POSITION_PACKET_MAGIC = 0x504F5331;
 constexpr float PLAYER_EYE_HEIGHT = 1.8f;
+constexpr float MOVEMENT_SPEED = 8.0f;
+constexpr float MOUSE_SENSITIVITY = 0.0025f;
+constexpr float SEND_INTERVAL = 1.0f / 20.0f;
+constexpr float POSITION_ABS_MAX = 10000.0f;
+constexpr int WINDOW_FPS = 144;
 
 struct PositionPacket
 {
@@ -27,57 +35,57 @@ class PeerNetwork
 {
 public:
     ~PeerNetwork() {
-        if (connection_ != k_HSteamNetConnection_Invalid)
+        if (connection != k_HSteamNetConnection_Invalid)
         {
             SteamNetworkingSockets()->CloseConnection(
-                connection_,
+                connection,
                 0,
                 "Game closed",
                 false
             );
         }
 
-        if (listenSocket_ != k_HSteamListenSocket_Invalid)
-            SteamNetworkingSockets()->CloseListenSocket(listenSocket_);
+        if (listenSocket != k_HSteamListenSocket_Invalid)
+            SteamNetworkingSockets()->CloseListenSocket(listenSocket);
     }
 
     bool StartHost()
     {
-        hosting_ = true;
+        hosting = true;
 
-        ISteamNetworkingSockets *sockets = SteamNetworkingSockets();
+        ISteamNetworkingSockets* sockets = SteamNetworkingSockets();
         if (sockets == nullptr)
         {
-            status_ = "Steam networking is not available";
-            hosting_ = false;
+            status = "Steam networking is not available";
+            hosting = false;
             return false;
         }
 
-        listenSocket_ = sockets->CreateListenSocketP2P(
+        listenSocket = sockets->CreateListenSocketP2P(
             0,          // Virtual port
             0,          // Option count
             nullptr
         );
 
-        if (listenSocket_ == k_HSteamListenSocket_Invalid)
+        if (listenSocket == k_HSteamListenSocket_Invalid)
         {
-            status_ = "Failed to create P2P listen socket";
-            hosting_ = false;
+            status = "Failed to create P2P listen socket";
+            hosting = false;
             return false;
         }
 
-        status_ = "Waiting for another player...";
+        status = "Waiting for another player...";
         return true;
     }
 
-    bool ConnectToHost(std::uint64_t hostSteamID)
+    bool ConnectToHost(const std::uint64_t hostSteamID)
     {
-        hosting_ = false;
+        hosting = false;
 
-        ISteamNetworkingSockets *sockets = SteamNetworkingSockets();
+        ISteamNetworkingSockets* sockets = SteamNetworkingSockets();
         if (sockets == nullptr)
         {
-            status_ = "Steam networking is not available";
+            status = "Steam networking is not available";
             return false;
         }
 
@@ -85,26 +93,26 @@ public:
         identity.Clear();
         identity.SetSteamID64(hostSteamID);
 
-        connection_ = sockets->ConnectP2P(
+        connection = sockets->ConnectP2P(
             identity,
             0,          // Must match the host virtual port
             0,
             nullptr
         );
 
-        if (connection_ == k_HSteamNetConnection_Invalid)
+        if (connection == k_HSteamNetConnection_Invalid)
         {
-            status_ = "Failed to start connection";
+            status = "Failed to start connection";
             return false;
         }
 
-        status_ = "Connecting through Steam...";
+        status = "Connecting through Steam...";
         return true;
     }
 
-    void SendPosition(float x, float z)
+    void SendPosition(const float x, const float z)
     {
-        if (!connected_)
+        if (!connected)
             return;
 
         const PositionPacket packet{
@@ -114,7 +122,7 @@ public:
         };
 
         SteamNetworkingSockets()->SendMessageToConnection(
-            connection_,
+            connection,
             &packet,
             static_cast<std::uint32_t>(sizeof(packet)),
             k_nSteamNetworkingSend_Unreliable |
@@ -125,7 +133,7 @@ public:
 
     bool ReceivePosition(float& outputX, float& outputZ)
     {
-        if (!connected_)
+        if (!connected)
             return false;
 
         bool receivedPosition = false;
@@ -136,7 +144,7 @@ public:
 
             const int count =
                 SteamNetworkingSockets()->ReceiveMessagesOnConnection(
-                    connection_,
+                    connection,
                     &message,
                     1
                 );
@@ -158,8 +166,8 @@ public:
                     if (packet.magic == POSITION_PACKET_MAGIC &&
                         std::isfinite(packet.x) &&
                         std::isfinite(packet.z) &&
-                        std::abs(packet.x) < 10000.0f &&
-                        std::abs(packet.z) < 10000.0f)
+                        std::abs(packet.x) < POSITION_ABS_MAX &&
+                        std::abs(packet.z) < POSITION_ABS_MAX)
                     {
                         outputX = packet.x;
                         outputZ = packet.z;
@@ -176,30 +184,30 @@ public:
 
     [[nodiscard]] bool Connected() const
     {
-        return connected_;
+        return connected;
     }
 
     [[nodiscard]] bool Hosting() const
     {
-        return hosting_;
+        return hosting;
     }
 
     [[nodiscard]] const std::string& Status() const
     {
-        return status_;
+        return status;
     }
 
 private:
-    HSteamListenSocket listenSocket_ =
+    HSteamListenSocket listenSocket =
         k_HSteamListenSocket_Invalid;
 
-    HSteamNetConnection connection_ =
+    HSteamNetConnection connection =
         k_HSteamNetConnection_Invalid;
 
-    bool connected_ = false;
-    bool hosting_ = false;
+    bool connected = false;
+    bool hosting = false;
 
-    std::string status_ = "Not connected";
+    std::string status = "Not connected";
 
     STEAM_CALLBACK(
         PeerNetwork,
@@ -223,11 +231,11 @@ void PeerNetwork::OnConnectionStatusChanged(
     // Incoming ConnectP2P only. Outbound joins report listenSocket Invalid,
     // which also matches a client that never hosted — do not Accept/Close those.
     if (newState == k_ESteamNetworkingConnectionState_Connecting &&
-        listenSocket_ != k_HSteamListenSocket_Invalid &&
-        callback->m_info.m_hListenSocket == listenSocket_)
+        listenSocket != k_HSteamListenSocket_Invalid &&
+        callback->m_info.m_hListenSocket == listenSocket)
     {
         // This example only allows one remote player.
-        if (connection_ != k_HSteamNetConnection_Invalid)
+        if (connection != k_HSteamNetConnection_Invalid)
         {
             SteamNetworkingSockets()->CloseConnection(
                 changedConnection,
@@ -246,8 +254,8 @@ void PeerNetwork::OnConnectionStatusChanged(
 
         if (result == k_EResultOK)
         {
-            connection_ = changedConnection;
-            status_ = "Player found; finishing connection...";
+            connection = changedConnection;
+            status = "Player found; finishing connection...";
         }
         else
         {
@@ -258,20 +266,20 @@ void PeerNetwork::OnConnectionStatusChanged(
                 false
             );
 
-            status_ = "Could not accept connection";
+            status = "Could not accept connection";
         }
 
         return;
     }
 
     // Ignore callbacks unrelated to our active connection.
-    if (changedConnection != connection_)
+    if (changedConnection != connection)
         return;
 
     if (newState == k_ESteamNetworkingConnectionState_Connected)
     {
-        connected_ = true;
-        status_ = "Connected";
+        connected = true;
+        status = "Connected";
         return;
     }
 
@@ -280,26 +288,26 @@ void PeerNetwork::OnConnectionStatusChanged(
         newState ==
             k_ESteamNetworkingConnectionState_ProblemDetectedLocally)
     {
-        connected_ = false;
+        connected = false;
 
-        status_ = "Disconnected";
+        status = "Disconnected";
 
         if (callback->m_info.m_szEndDebug[0] != '\0')
         {
-            status_ += ": ";
-            status_ += callback->m_info.m_szEndDebug;
+            status += ": ";
+            status += callback->m_info.m_szEndDebug;
         }
 
         // Steam requires the local connection object to be destroyed
         // after receiving a closed/problem callback.
         SteamNetworkingSockets()->CloseConnection(
-            connection_,
+            connection,
             0,
             nullptr,
             false
         );
 
-        connection_ = k_HSteamNetConnection_Invalid;
+        connection = k_HSteamNetConnection_Invalid;
     }
 }
 
@@ -311,22 +319,21 @@ enum class GameScreen
     Playing
 };
 
+} // namespace
+
 int main()
 {
-    constexpr int screenWidth = 1280;
-    constexpr int screenHeight = 720;
-
-    SteamPrepareLaunch();
+    HhSteam::PrepareLaunch();
 
     InitWindow(
-        screenWidth,
-        screenHeight,
+        hh::WINDOW_WIDTH,
+        hh::WINDOW_HEIGHT,
         "Friendslop Steam P2P"
     );
 
-    SetTargetFPS(144);
+    SetTargetFPS(WINDOW_FPS);
 
-    if (!SteamInit())
+    if (!HhSteam::Init())
     {
         while (!WindowShouldClose())
         {
@@ -357,7 +364,7 @@ int main()
     }
 
     // Starts Steam Datagram Relay initialization early.
-    ISteamNetworkingUtils *networkingUtils = SteamNetworkingUtils();
+    ISteamNetworkingUtils* networkingUtils = SteamNetworkingUtils();
     if (networkingUtils != nullptr)
         networkingUtils->InitRelayNetworkAccess();
 
@@ -422,22 +429,18 @@ int main()
 
         bool cursorLocked = false;
 
-        constexpr float movementSpeed = 8.0f;
-        constexpr float mouseSensitivity = 0.0025f;
-        constexpr float sendInterval = 1.0f / 20.0f;
-
         while (!WindowShouldClose())
         {
             // Steam callbacks must be processed regularly.
-            SteamTick();
+            HhSteam::Tick();
 
             if (!p2pJoinStarted &&
                 !network.Hosting() &&
                 !network.Connected() &&
-                SteamInLobby() &&
-                !SteamIsLobbyOwner())
+                HhSteam::InLobby() &&
+                !HhSteam::IsLobbyOwner())
             {
-                const std::uint64_t ownerSteamID = SteamLobbyOwnerID64();
+                const std::uint64_t ownerSteamID = HhSteam::LobbyOwnerID64();
                 if (ownerSteamID != 0 && network.ConnectToHost(ownerSteamID))
                 {
                     camera.position = {
@@ -488,14 +491,14 @@ int main()
 
                     if (network.StartHost())
                     {
-                        SteamCreateLobby();
+                        HhSteam::CreateLobby();
                         currentScreen = GameScreen::Hosting;
                     }
                 }
 
                 if (IsKeyPressed(KEY_J))
                 {
-                    if (SteamJoinFriendLobby())
+                    if (HhSteam::JoinFriendLobby())
                     {
                         camera.position = {
                             3.0f,
@@ -512,8 +515,8 @@ int main()
                 const float deltaTime = GetFrameTime();
                 const Vector2 mouseDelta = GetMouseDelta();
 
-                yaw -= mouseDelta.x * mouseSensitivity;
-                pitch -= mouseDelta.y * mouseSensitivity;
+                yaw -= mouseDelta.x * MOUSE_SENSITIVITY;
+                pitch -= mouseDelta.y * MOUSE_SENSITIVITY;
                 pitch = Clamp(pitch, -1.5f, 1.5f);
 
                 const Vector3 lookDirection = {
@@ -553,7 +556,7 @@ int main()
                     movement = Vector3Normalize(movement);
                     movement = Vector3Scale(
                         movement,
-                        movementSpeed * deltaTime
+                        MOVEMENT_SPEED * deltaTime
                     );
 
                     camera.position =
@@ -565,7 +568,7 @@ int main()
 
                 sendTimer += deltaTime;
 
-                if (sendTimer >= sendInterval)
+                if (sendTimer >= SEND_INTERVAL)
                 {
                     sendTimer = 0.0f;
 
@@ -605,7 +608,7 @@ int main()
                 );
 
                 DrawText(
-                    SteamLobbyHint(),
+                    HhSteam::LobbyHint(),
                     60,
                     160,
                     20,
@@ -639,14 +642,14 @@ int main()
                 );
 
                 DrawText(
-                    SteamLobbyHint(),
+                    HhSteam::LobbyHint(),
                     60,
                     150,
                     20,
                     GRAY
                 );
 
-                const int memberCount = SteamLobbyMemberCount();
+                const int memberCount = HhSteam::LobbyMemberCount();
                 DrawText(
                     TextFormat("In lobby (%d):", memberCount),
                     60,
@@ -658,7 +661,7 @@ int main()
                 for (int i = 0; i < memberCount; ++i)
                 {
                     DrawText(
-                        SteamLobbyMemberName(i),
+                        HhSteam::LobbyMemberName(i),
                         84,
                         220 + i * 28,
                         20,
@@ -677,7 +680,7 @@ int main()
             else if (currentScreen == GameScreen::Connecting)
             {
                 DrawText(
-                    SteamLobbyHint(),
+                    HhSteam::LobbyHint(),
                     60,
                     60,
                     24,
@@ -749,22 +752,22 @@ int main()
                     WHITE
                 );
 
-                DrawFPS(screenWidth - 100, 20);
+                DrawFPS(hh::WINDOW_WIDTH - 100, 20);
 
                 // Crosshair
                 DrawLine(
-                    screenWidth / 2 - 8,
-                    screenHeight / 2,
-                    screenWidth / 2 + 8,
-                    screenHeight / 2,
+                    hh::WINDOW_WIDTH / 2 - 8,
+                    hh::WINDOW_HEIGHT / 2,
+                    hh::WINDOW_WIDTH / 2 + 8,
+                    hh::WINDOW_HEIGHT / 2,
                     WHITE
                 );
 
                 DrawLine(
-                    screenWidth / 2,
-                    screenHeight / 2 - 8,
-                    screenWidth / 2,
-                    screenHeight / 2 + 8,
+                    hh::WINDOW_WIDTH / 2,
+                    hh::WINDOW_HEIGHT / 2 - 8,
+                    hh::WINDOW_WIDTH / 2,
+                    hh::WINDOW_HEIGHT / 2 + 8,
                     WHITE
                 );
             }
@@ -782,7 +785,7 @@ int main()
             UnloadShader(billboardShader);
     }
 
-    SteamShutdown();
+    HhSteam::Shutdown();
     CloseWindow();
 
     return 0;
