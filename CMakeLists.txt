@@ -17,6 +17,13 @@ FetchContent_MakeAvailable(raylib)
 
 add_executable(${PROJECT_NAME}
     src/main.cpp
+        Headers/Math/Vector/Vector2.hpp
+        Headers/Math/Vector/Vector2Math.hpp
+        Headers/Math/Vector/Vector3.hpp
+        Headers/Math/Vector/Vector3Math.hpp
+        Headers/Math/Vector/Vector4.hpp
+        Headers/Math/Quaternion/Quaternion.hpp
+        Headers/Math/Matrix/Matrix4.hpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE src)
