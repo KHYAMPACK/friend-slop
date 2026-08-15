@@ -1,6 +1,8 @@
 #include <raylib.h>
 #include <raymath.h>
 
+#include "steam/steam_client.hpp"
+
 #include <steam/steam_api.h>
 
 #include <charconv>
@@ -44,12 +46,19 @@ public:
     {
         hosting_ = true;
 
-        listenSocket_ =
-            SteamNetworkingSockets()->CreateListenSocketP2P(
-                0,          // Virtual port
-                0,          // Option count
-                nullptr
-            );
+        ISteamNetworkingSockets *sockets = SteamNetworkingSockets();
+        if (sockets == nullptr)
+        {
+            status_ = "Steam networking is not available";
+            hosting_ = false;
+            return false;
+        }
+
+        listenSocket_ = sockets->CreateListenSocketP2P(
+            0,          // Virtual port
+            0,          // Option count
+            nullptr
+        );
 
         if (listenSocket_ == k_HSteamListenSocket_Invalid)
         {
@@ -66,11 +75,18 @@ public:
     {
         hosting_ = false;
 
+        ISteamNetworkingSockets *sockets = SteamNetworkingSockets();
+        if (sockets == nullptr)
+        {
+            status_ = "Steam networking is not available";
+            return false;
+        }
+
         SteamNetworkingIdentity identity{};
         identity.Clear();
         identity.SetSteamID64(hostSteamID);
 
-        connection_ = SteamNetworkingSockets()->ConnectP2P(
+        connection_ = sockets->ConnectP2P(
             identity,
             0,          // Must match the host virtual port
             0,
@@ -196,14 +212,19 @@ private:
 void PeerNetwork::OnConnectionStatusChanged(
     SteamNetConnectionStatusChangedCallback_t* callback)
 {
+    if (callback == nullptr)
+        return;
+
     const HSteamNetConnection changedConnection =
         callback->m_hConn;
 
     const ESteamNetworkingConnectionState newState =
         callback->m_info.m_eState;
 
-    // A client is attempting to connect to our listen socket.
+    // Incoming ConnectP2P only. Outbound joins report listenSocket Invalid,
+    // which also matches a client that never hosted — do not Accept/Close those.
     if (newState == k_ESteamNetworkingConnectionState_Connecting &&
+        listenSocket_ != k_HSteamListenSocket_Invalid &&
         callback->m_info.m_hListenSocket == listenSocket_)
     {
         // This example only allows one remote player.
@@ -324,7 +345,7 @@ int main()
 
     SetTargetFPS(144);
 
-    if (!SteamAPI_Init())
+    if (!SteamInit())
     {
         while (!WindowShouldClose())
         {
@@ -355,7 +376,9 @@ int main()
     }
 
     // Starts Steam Datagram Relay initialization early.
-    SteamNetworkingUtils()->InitRelayNetworkAccess();
+    ISteamNetworkingUtils *networkingUtils = SteamNetworkingUtils();
+    if (networkingUtils != nullptr)
+        networkingUtils->InitRelayNetworkAccess();
 
     {
         PeerNetwork network;
@@ -425,7 +448,7 @@ int main()
         while (!WindowShouldClose())
         {
             // Steam callbacks must be processed regularly.
-            SteamAPI_RunCallbacks();
+            SteamTick();
 
             if ((currentScreen == GameScreen::Hosting || currentScreen == GameScreen::Connecting) && network.Connected())
             {
@@ -794,7 +817,7 @@ int main()
             UnloadShader(billboardShader);
     }
 
-    SteamAPI_Shutdown();
+    SteamShutdown();
     CloseWindow();
 
     return 0;
